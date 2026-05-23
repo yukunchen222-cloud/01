@@ -3,12 +3,12 @@
 # 素材库路径 - 放入需要剪辑的原始视频
 # Windows示例: C:/Users/你的用户名/Desktop/素材库
 # Mac示例: /Users/你的用户名/Desktop/素材库
-MATERIAL_LIBRARY: ""
+MATERIAL_LIBRARY: "C:/Users/lonel/Desktop/素材库"
 
 # 成品库路径 - 剪辑完成的视频输出位置
 # Windows示例: C:/Users/你的用户名/Desktop/成品库
 # Mac示例: /Users/你的用户名/Desktop/成品库
-OUTPUT_LIBRARY: ""
+OUTPUT_LIBRARY: "C:/Users/lonel/Desktop/成品库"
 
 # 剪映安装路径 (可选，用于剪映桌面版自动化)
 # Windows默认: C:/Program Files/JianyingPro/JianyingPro.exe
