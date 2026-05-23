@@ -60,6 +60,7 @@ class EditGlobalState(BaseModel):
     # 错误记录
     error_count: int = Field(default=0, description="错误数量")
     need_rework: bool = Field(default=False, description="是否需要返工")
+    revision_count: int = Field(default=0, description="已返工次数")
     error_patterns: Dict[str, Any] = Field(default_factory=dict, description="错误模式分析")
     optimization_suggestions: List[str] = Field(default_factory=list, description="优化建议")
 
@@ -267,10 +268,11 @@ class OutputExportOutput(BaseModel):
 # ==================== 错误记录节点 ====================
 class ErrorRecordInput(BaseModel):
     """错误记录节点输入"""
-    edit_log: List[str] = Field(..., description="剪辑操作日志")
+    edit_log: List[str] = Field(default_factory=list, description="剪辑操作日志")
     material_path: str = Field(default="", description="素材路径")
     session_id: Optional[str] = Field(default=None, description="会话ID")
     operation_types: Optional[List[str]] = Field(default=None, description="操作类型列表")
+    revision_count: int = Field(default=0, description="当前返工次数")
 
 
 class ErrorRecordOutput(BaseModel):
@@ -281,6 +283,7 @@ class ErrorRecordOutput(BaseModel):
     optimization_suggestions: List[str] = Field(default_factory=list, description="优化建议")
     need_rework: bool = Field(default=False, description="是否需要返工")
     rework_reason: str = Field(default="", description="返工原因")
+    revision_count: int = Field(default=0, description="更新后的返工次数")
 
 
 # ==================== 返工条件节点 ====================
@@ -289,6 +292,7 @@ class ReworkDecisionInput(BaseModel):
     need_rework: bool = Field(..., description="是否需要返工")
     failed_count: int = Field(default=0, description="失败操作数")
     revision_count: int = Field(default=0, description="已返工次数")
+    error_count: int = Field(default=0, description="错误数量")
 
 
 class ReworkDecisionOutput(BaseModel):

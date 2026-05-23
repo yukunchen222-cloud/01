@@ -32,6 +32,9 @@ def error_record_node(
     """
     ctx = runtime.context
     
+    # 获取当前返工次数
+    current_revision = getattr(state, 'revision_count', 0) or 0
+    
     # 加载历史错误记录
     history = _load_error_history()
     
@@ -60,12 +63,13 @@ def error_record_node(
     # 生成优化建议
     optimization_suggestions = _generate_optimization_suggestions(error_patterns, current_errors)
     
-    # 决定是否需要返工
-    need_rework = len(current_errors) > 0
+    # 决定是否需要返工（最多3次）
+    need_rework = len(current_errors) > 0 and current_revision < 3
     rework_reason = ""
     
     if need_rework:
         rework_reason = _generate_rework_reason(current_errors, error_patterns)
+        current_revision += 1  # 递增返工次数
     
     return ErrorRecordOutput(
         recorded=True,
@@ -73,7 +77,8 @@ def error_record_node(
         error_patterns=error_patterns,
         optimization_suggestions=optimization_suggestions,
         need_rework=need_rework,
-        rework_reason=rework_reason
+        rework_reason=rework_reason,
+        revision_count=current_revision  # 返回更新后的返工次数
     )
 
 

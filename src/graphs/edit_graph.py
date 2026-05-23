@@ -31,12 +31,15 @@ def should_rework(state: ReworkDecisionInput) -> str:
     # 最多返工3次
     max_revisions = 3
     
+    # 如果已达到最大返工次数，直接结束
     if state.revision_count >= max_revisions:
         return "达到上限，结束"
     
-    if state.need_rework and state.failed_count > 0:
+    # 如果需要返工且有错误，进行返工
+    if state.need_rework and (state.error_count > 0 or state.failed_count > 0):
         return "需要返工"
     
+    # 否则通过
     return "通过，结束"
 
 

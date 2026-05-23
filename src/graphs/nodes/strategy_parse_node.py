@@ -91,7 +91,7 @@ def strategy_parse_node(
             sequence=point.get("sequence", 0),
             operation_type=_determine_operation_type(point),
             source_timestamp=point.get("source_timestamp", ""),
-            duration=point.get("duration", ""),
+            duration=str(point.get("duration", "")),
             content=point.get("content", ""),
             effects=point.get("suggested_effects", []),
             parameters={
