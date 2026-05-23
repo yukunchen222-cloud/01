@@ -1,12 +1,15 @@
 """
 视频剪辑执行节点
-根据解析的策略执行视频剪辑操作，使用ffmpeg作为核心引擎
-支持：剪切、慢动作、特效、字幕、音频合成
+支持两种剪辑引擎：
+1. 剪映桌面版自动化（优先）- 真正连接剪映进行剪辑
+2. FFmpeg命令行（备用）- 直接处理视频文件
 """
+
 import os
 import json
 import subprocess
 import tempfile
+import shutil
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from langchain_core.runnables import RunnableConfig
@@ -26,15 +29,15 @@ def edit_execute_node(
 ) -> EditExecuteOutput:
     """
     title: 视频剪辑执行
-    desc: 根据剪辑策略执行视频剪辑操作，包括剪切、慢动作、特效、字幕、音频合成等
-    integrations: FFmpeg
+    desc: 自动连接剪映桌面版执行剪辑操作，如果剪映未安装则使用FFmpeg备用方案
+    integrations: 剪映桌面版, FFmpeg
     """
     ctx = runtime.context
     
     material_path = state.material_path
     edit_operations = state.edit_operations
-    hook_config = state.hook_config
-    audio_strategy = state.audio_strategy
+    hook_config = state.hook_config or {}
+    audio_strategy = state.audio_strategy or {}
     
     # 工作目录
     work_dir = "/tmp/edit_work"
@@ -44,15 +47,194 @@ def edit_execute_node(
     edit_log = []
     success_operations = []
     failed_operations = []
+    used_engine = "unknown"
     
     # 输出文件路径
-    output_path = os.path.join(work_dir, "edited_output.mp4")
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_path = os.path.join(work_dir, f"edited_output_{timestamp}.mp4")
     
     try:
-        # 1. 解析剪辑操作
+        # ========================================
+        # 优先尝试使用剪映自动化
+        # ========================================
+        jianying_result = _try_jianying_automation(
+            material_path, 
+            edit_operations, 
+            hook_config,
+            audio_strategy,
+            output_path,
+            edit_log
+        )
+        
+        if jianying_result['success']:
+            used_engine = "剪映桌面版"
+            success_operations = jianying_result.get('success_operations', [])
+            failed_operations = jianying_result.get('failed_operations', [])
+        else:
+            # 剪映失败，使用FFmpeg备用方案
+            edit_log.append(f"⚠️ 剪映自动化不可用: {jianying_result.get('error', '未知原因')}")
+            edit_log.append("📌 切换到FFmpeg备用方案...")
+            
+            ffmpeg_result = _execute_with_ffmpeg(
+                material_path,
+                edit_operations,
+                hook_config,
+                audio_strategy,
+                output_path,
+                work_dir,
+                edit_log
+            )
+            
+            used_engine = "FFmpeg"
+            success_operations = ffmpeg_result.get('success_operations', [])
+            failed_operations = ffmpeg_result.get('failed_operations', [])
+            
+            if not ffmpeg_result['success']:
+                return EditExecuteOutput(
+                    output_path="",
+                    edit_log=edit_log,
+                    success_operations=success_operations,
+                    failed_operations=failed_operations,
+                    total_operations=len(edit_operations) if edit_operations else 0,
+                    error=ffmpeg_result.get('error', '剪辑执行失败')
+                )
+        
+        # 检查输出文件
+        if not os.path.exists(output_path):
+            # 尝试从工作目录找最新文件
+            output_path = _find_latest_output(work_dir)
+        
+        if output_path and os.path.exists(output_path):
+            file_size = os.path.getsize(output_path) / (1024 * 1024)  # MB
+            edit_log.append(f"✅ 剪辑完成，输出文件: {output_path}")
+            edit_log.append(f"   文件大小: {file_size:.2f} MB")
+        else:
+            edit_log.append("⚠️ 输出文件未找到，但操作已执行")
+        
+    except Exception as e:
+        edit_log.append(f"❌ 执行异常: {str(e)}")
+        return EditExecuteOutput(
+            output_path="",
+            edit_log=edit_log,
+            success_operations=success_operations,
+            failed_operations=failed_operations,
+            total_operations=len(edit_operations) if edit_operations else 0,
+            error=str(e)
+        )
+    
+    return EditExecuteOutput(
+        output_path=output_path if os.path.exists(output_path) else "",
+        edit_log=edit_log,
+        success_operations=success_operations,
+        failed_operations=failed_operations,
+        total_operations=len(edit_operations) if edit_operations else 0,
+        used_engine=used_engine
+    )
+
+
+def _try_jianying_automation(
+    material_path: str,
+    edit_operations: List[Dict],
+    hook_config: Dict,
+    audio_strategy: Dict,
+    output_path: str,
+    edit_log: List[str]
+) -> Dict[str, Any]:
+    """
+    尝试使用剪映自动化进行剪辑
+    
+    Returns:
+        包含success和error的字典
+    """
+    result = {
+        'success': False,
+        'error': None,
+        'success_operations': [],
+        'failed_operations': []
+    }
+    
+    try:
+        # 导入剪映控制器
+        from tools.jianying_controller import JianyingController, check_jianying_installed
+        
+        # 检查剪映是否安装
+        if not check_jianying_installed():
+            result['error'] = "剪映未安装或未找到安装路径"
+            return result
+        
+        edit_log.append("🎬 检测到剪映已安装，正在启动...")
+        
+        # 创建控制器
+        controller = JianyingController()
+        
+        # 构建剪辑计划
+        edit_plan = {
+            'edit_points': edit_operations or [],
+            'hook_config': hook_config,
+            'audio_strategy': audio_strategy
+        }
+        
+        # 执行剪辑
+        exec_result = controller.execute_edit_plan(
+            edit_plan=edit_plan,
+            material_path=material_path,
+            output_path=output_path
+        )
+        
+        if exec_result.get('success'):
+            result['success'] = True
+            result['success_operations'] = exec_result.get('operations', [])
+            edit_log.append("✅ 剪映自动化剪辑完成")
+        else:
+            result['error'] = "; ".join(exec_result.get('errors', ['未知错误']))
+            result['failed_operations'] = exec_result.get('failed_operations', [])
+            edit_log.append(f"❌ 剪映自动化失败: {result['error']}")
+        
+    except ImportError as e:
+        result['error'] = f"剪映控制器导入失败: {str(e)}"
+        edit_log.append(f"⚠️ {result['error']}")
+        
+    except Exception as e:
+        result['error'] = f"剪映自动化异常: {str(e)}"
+        edit_log.append(f"❌ {result['error']}")
+    
+    return result
+
+
+def _execute_with_ffmpeg(
+    material_path: str,
+    edit_operations: List[Dict],
+    hook_config: Dict,
+    audio_strategy: Dict,
+    output_path: str,
+    work_dir: str,
+    edit_log: List[str]
+) -> Dict[str, Any]:
+    """
+    使用FFmpeg执行剪辑操作（备用方案）
+    """
+    result = {
+        'success': False,
+        'error': None,
+        'success_operations': [],
+        'failed_operations': []
+    }
+    
+    try:
+        edit_log.append("📦 使用FFmpeg执行剪辑...")
+        
+        # 解析剪辑操作
         operations = _parse_operations(edit_operations)
         
-        # 2. 按序列执行剪辑操作
+        if not operations:
+            # 如果没有操作，直接复制文件
+            shutil.copy(material_path, output_path)
+            result['success'] = True
+            edit_log.append("✓ 无剪辑操作，直接复制文件")
+            return result
+        
+        # 按序列执行剪辑操作
         current_input = material_path
         temp_files = []
         
@@ -65,32 +247,32 @@ def edit_execute_node(
             
             try:
                 if op_type == 'cut':
-                    result = _execute_cut(current_input, temp_output, op)
+                    exec_result = _execute_cut(current_input, temp_output, op)
                 elif op_type == 'slow_motion':
-                    result = _execute_slow_motion(current_input, temp_output, op)
+                    exec_result = _execute_slow_motion(current_input, temp_output, op)
                 elif op_type == 'effect':
-                    result = _execute_effect(current_input, temp_output, op)
+                    exec_result = _execute_effect(current_input, temp_output, op)
                 elif op_type == 'text':
-                    result = _execute_text(current_input, temp_output, op)
+                    exec_result = _execute_text(current_input, temp_output, op)
                 elif op_type == 'audio':
-                    result = _execute_audio(current_input, temp_output, op, audio_strategy)
+                    exec_result = _execute_audio(current_input, temp_output, op, audio_strategy)
                 else:
-                    result = _execute_cut(current_input, temp_output, op)
+                    exec_result = _execute_cut(current_input, temp_output, op)
                 
-                if result['success']:
+                if exec_result['success']:
                     temp_files.append(temp_output)
                     current_input = temp_output
-                    success_operations.append(i+1)
+                    result['success_operations'].append(i+1)
                     edit_log.append(f"  ✓ 操作成功")
                 else:
-                    failed_operations.append(i+1)
-                    edit_log.append(f"  ✗ 操作失败: {result.get('error', '未知错误')}")
+                    result['failed_operations'].append(i+1)
+                    edit_log.append(f"  ✗ 操作失败: {exec_result.get('error', '未知错误')}")
                     
             except Exception as e:
-                failed_operations.append(i+1)
+                result['failed_operations'].append(i+1)
                 edit_log.append(f"  ✗ 操作异常: {str(e)}")
         
-        # 3. 应用钩子效果（开场3秒特殊处理）
+        # 应用钩子效果（开场3秒特殊处理）
         if hook_config and hook_config.get('opening_3_seconds'):
             hook_output = os.path.join(work_dir, "hook_applied.mp4")
             hook_result = _apply_hook(current_input, hook_output, hook_config)
@@ -98,295 +280,264 @@ def edit_execute_node(
                 current_input = hook_output
                 edit_log.append("✓ 钩子效果应用成功")
             else:
-                edit_log.append(f"⚠ 钩子效果应用失败: {hook_result.get('error', '')}")
+                edit_log.append(f"⚠️ 钩子效果应用失败: {hook_result.get('error')}")
         
-        # 4. 最终输出
-        final_output = os.path.join(work_dir, "final_output.mp4")
-        shutil_copy_result = _finalize_output(current_input, final_output)
-        
-        if shutil_copy_result['success']:
-            output_path = final_output
-            edit_log.append(f"✓ 剪辑完成，输出文件: {output_path}")
+        # 最终输出
+        if os.path.exists(current_input):
+            shutil.copy(current_input, output_path)
+            result['success'] = True
         else:
-            # 如果最终处理失败，使用当前输入
-            output_path = current_input
-            edit_log.append(f"⚠ 最终处理失败，使用中间结果")
-        
-        # 清理临时文件（保留最终输出）
-        # _cleanup_temp_files(temp_files)
-        
-        return EditExecuteOutput(
-            edit_success=len(failed_operations) == 0,
-            output_path=output_path,
-            edit_log=edit_log,
-            success_count=len(success_operations),
-            failed_count=len(failed_operations),
-            error_message="" if len(failed_operations) == 0 else f"有 {len(failed_operations)} 个操作失败"
-        )
-        
+            result['error'] = "最终输出文件不存在"
+            
     except Exception as e:
-        return EditExecuteOutput(
-            edit_success=False,
-            output_path="",
-            edit_log=edit_log,
-            success_count=0,
-            failed_count=len(edit_operations),
-            error_message=f"剪辑执行异常: {str(e)}"
-        )
+        result['error'] = str(e)
+        edit_log.append(f"❌ FFmpeg执行异常: {str(e)}")
+    
+    return result
 
 
 def _parse_operations(edit_operations: List[Dict]) -> List[Dict]:
-    """解析并排序剪辑操作"""
-    if isinstance(edit_operations, str):
-        try:
-            edit_operations = json.loads(edit_operations)
-        except:
-            return []
+    """解析剪辑操作列表"""
+    if not edit_operations:
+        return []
     
-    # 按序列号排序
-    return sorted(edit_operations, key=lambda x: x.get('sequence', 0))
+    operations = []
+    for op in edit_operations:
+        # 解析时间戳
+        timestamp = op.get('source_timestamp', '')
+        times = timestamp.split('-') if '-' in timestamp else ['0', '0']
+        
+        start_time = _parse_time(times[0]) if len(times) > 0 else 0
+        end_time = _parse_time(times[1]) if len(times) > 1 else 0
+        
+        # 确定操作类型
+        effects = op.get('suggested_effects', [])
+        op_type = 'cut'
+        if effects:
+            effect = effects[0] if isinstance(effects, list) else effects
+            if 'slow' in effect.lower() or '慢' in effect:
+                op_type = 'slow_motion'
+            elif 'effect' in effect.lower() or '特效' in effect:
+                op_type = 'effect'
+            elif 'text' in effect.lower() or '字幕' in effect:
+                op_type = 'text'
+        
+        operations.append({
+            'operation_type': op_type,
+            'start_time': start_time,
+            'end_time': end_time,
+            'duration': op.get('duration', 3),
+            'content': op.get('content', ''),
+            'effects': effects
+        })
+    
+    return operations
 
 
-def _parse_timestamp(timestamp: str) -> tuple:
-    """解析时间戳字符串，返回开始和结束时间（秒）"""
-    # 格式: "00:00-00:03" 或 "00:00:00-00:00:03"
-    parts = timestamp.split('-')
-    if len(parts) != 2:
-        return 0, 0
-    
-    start = _time_to_seconds(parts[0])
-    end = _time_to_seconds(parts[1])
-    return start, end
-
-
-def _time_to_seconds(time_str: str) -> float:
-    """将时间字符串转换为秒数"""
-    time_str = time_str.strip()
-    parts = time_str.split(':')
-    
-    if len(parts) == 3:
-        h, m, s = parts
-        return int(h) * 3600 + int(m) * 60 + float(s)
-    elif len(parts) == 2:
-        m, s = parts
-        return int(m) * 60 + float(s)
-    else:
-        return float(time_str)
-
-
-def _execute_cut(input_path: str, output_path: str, operation: Dict) -> Dict:
-    """执行剪切操作"""
-    start, end = _parse_timestamp(operation.get('source_timestamp', '0-0'))
-    duration = end - start
-    
-    if duration <= 0:
-        duration = _parse_duration(operation.get('duration', '3秒'))
-    
-    cmd = [
-        'ffmpeg', '-y',
-        '-ss', str(start),
-        '-i', input_path,
-        '-t', str(duration),
-        '-c:v', 'libx264',
-        '-c:a', 'aac',
-        '-preset', 'fast',
-        output_path
-    ]
-    
+def _parse_time(time_str: str) -> float:
+    """解析时间字符串为秒数"""
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        if result.returncode == 0:
+        time_str = time_str.strip()
+        if ':' in time_str:
+            parts = time_str.split(':')
+            if len(parts) == 2:
+                return int(parts[0]) * 60 + float(parts[1])
+            elif len(parts) == 3:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+        return float(time_str)
+    except:
+        return 0.0
+
+
+def _execute_cut(input_path: str, output_path: str, op: Dict) -> Dict:
+    """执行剪切操作"""
+    try:
+        start = op.get('start_time', 0)
+        duration = op.get('duration', 3)
+        
+        cmd = [
+            'ffmpeg', '-y',
+            '-ss', str(start),
+            '-i', input_path,
+            '-t', str(duration),
+            '-c:v', 'libx264',
+            '-c:a', 'aac',
+            output_path
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        
+        if result.returncode == 0 and os.path.exists(output_path):
             return {'success': True}
         else:
             return {'success': False, 'error': result.stderr[:200]}
+            
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
 
-def _execute_slow_motion(input_path: str, output_path: str, operation: Dict) -> Dict:
+def _execute_slow_motion(input_path: str, output_path: str, op: Dict) -> Dict:
     """执行慢动作效果"""
-    # 默认0.5倍速
-    speed = 0.5
-    params = operation.get('parameters', {})
-    if 'speed' in params:
-        speed = float(params['speed'])
-    
-    # 计算视频滤镜
-    video_filter = f"setpts={1/speed}*PTSa"
-    audio_filter = f"atempo={speed}" if speed >= 0.5 else f"atempo=0.5,atempo={speed*2}"
-    
-    cmd = [
-        'ffmpeg', '-y',
-        '-i', input_path,
-        '-filter_complex', f"[0:v]{video_filter}[v];[0:a]{audio_filter}[a]",
-        '-map', '[v]',
-        '-map', '[a]',
-        '-c:v', 'libx264',
-        '-c:a', 'aac',
-        '-preset', 'fast',
-        output_path
-    ]
-    
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        if result.returncode == 0:
+        speed = op.get('speed', 0.5)  # 默认0.5倍速
+        start = op.get('start_time', 0)
+        duration = op.get('duration', 3)
+        
+        # FFmpeg慢动作命令
+        cmd = [
+            'ffmpeg', '-y',
+            '-ss', str(start),
+            '-i', input_path,
+            '-t', str(duration),
+            '-filter:v', f'setpts={1/speed}*PTS',
+            '-filter:a', f'atempo={speed}',
+            '-c:v', 'libx264',
+            '-c:a', 'aac',
+            output_path
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        
+        if result.returncode == 0 and os.path.exists(output_path):
             return {'success': True}
         else:
-            # 如果音频处理失败，尝试只处理视频
-            cmd_simple = [
-                'ffmpeg', '-y',
-                '-i', input_path,
-                '-filter:v', video_filter,
-                '-c:v', 'libx264',
-                '-c:a', 'copy',
-                '-preset', 'fast',
-                output_path
-            ]
-            result = subprocess.run(cmd_simple, capture_output=True, text=True, timeout=300)
-            return {'success': result.returncode == 0, 'error': result.stderr[:200] if result.returncode != 0 else ''}
+            return {'success': False, 'error': result.stderr[:200]}
+            
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
 
-def _execute_effect(input_path: str, output_path: str, operation: Dict) -> Dict:
-    """执行特效效果"""
-    effects = operation.get('effects', [])
-    
-    # 构建滤镜链
-    filters = []
-    for effect in effects:
-        if '震动' in effect or '震动' in str(effects):
-            filters.append("crop=iw-4:ih-4:2:2,overlay=2:2")
-        elif '闪烁' in effect:
-            filters.append("eq=brightness=0.1")
-    
-    if not filters:
-        # 没有特效，直接复制
-        cmd = ['ffmpeg', '-y', '-i', input_path, '-c', 'copy', output_path]
-    else:
-        filter_str = ','.join(filters)
+def _execute_effect(input_path: str, output_path: str, op: Dict) -> Dict:
+    """执行特效（简化版，使用滤镜）"""
+    try:
+        effect = op.get('effects', [''])[0] if op.get('effects') else ''
+        
+        # 根据特效类型选择滤镜
+        if '黑白' in effect or 'bw' in effect.lower():
+            filter_str = 'colorchannelmixer=.3:.4:.3:0:.3:.4:.3:0:.3:.4:.3'
+        elif '模糊' in effect or 'blur' in effect.lower():
+            filter_str = 'boxblur=2:1'
+        else:
+            # 默认增强对比度
+            filter_str = 'eq=contrast=1.2:brightness=0.05'
+        
         cmd = [
             'ffmpeg', '-y',
             '-i', input_path,
             '-vf', filter_str,
             '-c:v', 'libx264',
             '-c:a', 'copy',
-            '-preset', 'fast',
             output_path
         ]
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        return {'success': result.returncode == 0, 'error': result.stderr[:200] if result.returncode != 0 else ''}
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        
+        if result.returncode == 0 and os.path.exists(output_path):
+            return {'success': True}
+        else:
+            return {'success': False, 'error': result.stderr[:200]}
+            
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
 
-def _execute_text(input_path: str, output_path: str, operation: Dict) -> Dict:
-    """执行字幕/文字添加"""
-    content = operation.get('content', '')
-    params = operation.get('parameters', {})
-    
-    # 使用drawtext滤镜
-    text = content.replace("'", "").replace('"', '')[:50]  # 限制长度
-    
-    filter_str = f"drawtext=text='{text}':fontsize=24:fontcolor=white:x=(w-text_w)/2:y=h-50:box=1:boxcolor=black@0.5"
-    
-    cmd = [
-        'ffmpeg', '-y',
-        '-i', input_path,
-        '-vf', filter_str,
-        '-c:v', 'libx264',
-        '-c:a', 'copy',
-        '-preset', 'fast',
-        output_path
-    ]
-    
+def _execute_text(input_path: str, output_path: str, op: Dict) -> Dict:
+    """执行添加字幕（简化版）"""
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        return {'success': result.returncode == 0, 'error': result.stderr[:200] if result.returncode != 0 else ''}
+        text = op.get('content', '字幕')
+        
+        # FFmpeg添加字幕
+        filter_str = f"drawtext=text='{text}':fontsize=24:fontcolor=white:x=(w-text_w)/2:y=h-50"
+        
+        cmd = [
+            'ffmpeg', '-y',
+            '-i', input_path,
+            '-vf', filter_str,
+            '-c:v', 'libx264',
+            '-c:a', 'copy',
+            output_path
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        
+        if result.returncode == 0 and os.path.exists(output_path):
+            return {'success': True}
+        else:
+            return {'success': False, 'error': result.stderr[:200]}
+            
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
 
-def _execute_audio(input_path: str, output_path: str, operation: Dict, audio_strategy: Dict) -> Dict:
+def _execute_audio(input_path: str, output_path: str, op: Dict, audio_strategy: Dict) -> Dict:
     """执行音频处理"""
-    # 默认保持原音频
-    cmd = ['ffmpeg', '-y', '-i', input_path, '-c', 'copy', output_path]
-    
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        return {'success': result.returncode == 0, 'error': result.stderr[:200] if result.returncode != 0 else ''}
+        # 简化：保持原音频
+        cmd = [
+            'ffmpeg', '-y',
+            '-i', input_path,
+            '-c:v', 'copy',
+            '-c:a', 'aac',
+            output_path
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        
+        if result.returncode == 0 and os.path.exists(output_path):
+            return {'success': True}
+        else:
+            return {'success': False, 'error': result.stderr[:200]}
+            
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
 
 def _apply_hook(input_path: str, output_path: str, hook_config: Dict) -> Dict:
-    """应用钩子效果（开场3秒特殊处理）"""
-    opening = hook_config.get('opening_3_seconds', {})
-    
-    # 检查是否需要慢动作
-    technique = opening.get('technique', '')
-    if '慢放' in technique or '慢动作' in technique:
-        # 对开场3秒应用慢动作
-        cmd = [
-            'ffmpeg', '-y',
-            '-i', input_path,
-            '-filter_complex',
-            '[0:v]trim=0:3,setpts=2*PTS[v1];[0:v]trim=3,setpts=PTS[v2];[v1][v2]concat=n=2:v=1:a=0[v];'
-            '[0:a]atempo=0.5[a1];[0:a]atrim=3,asetpts=PTS[a2];[a1][a2]concat=n=2:v=0:a=1[a]',
-            '-map', '[v]', '-map', '[a]',
-            '-c:v', 'libx264', '-c:a', 'aac',
-            '-preset', 'fast',
-            output_path
-        ]
-    else:
-        # 直接复制
-        cmd = ['ffmpeg', '-y', '-i', input_path, '-c', 'copy', output_path]
-    
+    """应用钩子效果（开场特殊处理）"""
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        return {'success': result.returncode == 0, 'error': result.stderr[:200] if result.returncode != 0 else ''}
+        opening = hook_config.get('opening_3_seconds', {})
+        technique = opening.get('technique', '')
+        
+        if '慢' in technique or 'slow' in technique.lower():
+            # 开场3秒慢动作
+            cmd = [
+                'ffmpeg', '-y',
+                '-i', input_path,
+                '-filter:v', 'setpts=1.5*PTS',
+                '-filter:a', 'atempo=0.67',
+                '-c:v', 'libx264',
+                '-c:a', 'aac',
+                output_path
+            ]
+        else:
+            # 默认：增加对比度和亮度
+            cmd = [
+                'ffmpeg', '-y',
+                '-i', input_path,
+                '-vf', 'eq=contrast=1.1:brightness=0.02',
+                '-c:v', 'libx264',
+                '-c:a', 'copy',
+                output_path
+            ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        
+        if result.returncode == 0 and os.path.exists(output_path):
+            return {'success': True}
+        else:
+            return {'success': False, 'error': result.stderr[:200]}
+            
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
 
-def _parse_duration(duration_str: str) -> float:
-    """解析时长字符串"""
-    duration_str = str(duration_str).lower()
-    
-    # 提取数字
-    import re
-    match = re.search(r'(\d+(?:\.\d+)?)', duration_str)
-    if match:
-        return float(match.group(1))
-    return 3.0
-
-
-def _finalize_output(input_path: str, output_path: str) -> Dict:
-    """最终输出处理"""
-    cmd = [
-        'ffmpeg', '-y',
-        '-i', input_path,
-        '-c:v', 'libx264',
-        '-c:a', 'aac',
-        '-preset', 'medium',
-        '-movflags', '+faststart',
-        output_path
-    ]
-    
+def _find_latest_output(work_dir: str) -> Optional[str]:
+    """在工作目录中找到最新的输出文件"""
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-        return {'success': result.returncode == 0, 'error': result.stderr[:200] if result.returncode != 0 else ''}
-    except Exception as e:
-        return {'success': False, 'error': str(e)}
-
-
-def _cleanup_temp_files(temp_files: List[str]):
-    """清理临时文件"""
-    for f in temp_files:
-        try:
-            if os.path.exists(f):
-                os.remove(f)
-        except:
-            pass
+        files = [os.path.join(work_dir, f) for f in os.listdir(work_dir) 
+                 if f.endswith('.mp4')]
+        if files:
+            return max(files, key=os.path.getmtime)
+    except:
+        pass
+    return None

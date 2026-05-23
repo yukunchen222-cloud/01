@@ -2,7 +2,13 @@
 
 ## 一、本地环境准备
 
-### 1. 创建素材库和成品库文件夹
+### 1. 安装剪映专业版 (必需)
+
+**下载地址**: https://www.capcut.cn/
+
+安装后确保可以正常打开剪映。
+
+### 2. 创建素材库和成品库文件夹
 
 在您的电脑桌面创建两个文件夹：
 
@@ -18,7 +24,7 @@ C:\Users\您的用户名\Desktop\成品库
 /Users/您的用户名/Desktop/成品库
 ```
 
-### 2. 配置工作流路径
+### 3. 配置工作流路径
 
 编辑 `config/workflow_config.yaml` 文件，填入您的实际路径：
 
@@ -30,9 +36,12 @@ OUTPUT_LIBRARY: "C:/Users/张三/Desktop/成品库"
 # Mac示例  
 MATERIAL_LIBRARY: "/Users/zhangsan/Desktop/素材库"
 OUTPUT_LIBRARY: "/Users/zhangsan/Desktop/成品库"
+
+# 剪映路径（如果自动检测失败，手动指定）
+JIANYING_PATH: "C:/Program Files/JianyingPro/JianyingPro.exe"
 ```
 
-### 3. 安装FFmpeg (视频处理必需)
+### 4. 安装FFmpeg (视频处理必需)
 
 **Windows**:
 1. 下载: https://ffmpeg.org/download.html
@@ -49,35 +58,41 @@ brew install ffmpeg
 ffmpeg -version
 ```
 
-## 二、使用流程
+### 5. 安装Python依赖
 
-### 步骤1: 放入素材视频
-将需要剪辑的短剧视频放入 **素材库** 文件夹
-
-### 步骤2: 运行爆款Agent获取剪辑策略
-```python
-from src.graphs.graph import main_graph
-
-result = main_graph.invoke({
-    "material_video": {"url": "素材库/your_video.mp4", "file_type": "video"},
-    "drama_type": "都市情感"  # 可选: 古装、悬疑、甜宠等
-})
-
-# 获取剪辑策略
-strategy = result["edit_strategy"]
-print(strategy)
+```bash
+cd /workspace/projects
+pip install pyautogui pywinauto pillow
 ```
 
-### 步骤3: 确认剪辑策略
-审核生成的剪辑策略文档，确认后继续
+## 二、使用流程
 
-### 步骤4: 运行剪辑Agent
-```python
-from src.graphs.edit_graph import edit_graph
-import json
+### 一键运行（推荐）
 
-result = edit_graph.invoke({
-    "raw_strategy": json.dumps(strategy),
+```bash
+python run_workflow.py
+```
+
+选择 **模式1** 即可自动处理素材库内所有视频。
+
+### 详细流程
+
+#### 步骤1: 放入素材视频
+将需要剪辑的短剧视频放入 **素材库** 文件夹
+
+#### 步骤2: 运行工作流
+```bash
+python run_workflow.py
+```
+
+工作流会自动：
+1. ✅ 扫描素材库内所有视频
+2. ✅ 自动识别视频类型（都市情感/古装穿越/悬疑推理等）
+3. ✅ 搜索同类爆款视频并分析
+4. ✅ 生成剪辑策略
+5. ✅ **自动启动剪映执行剪辑**
+6. ✅ 导出成品到成品库
+7. ✅ 生成发布元数据（标题、封面、标签等）
     "material_library": "您的素材库路径",
     "material_filename": "your_video.mp4",
     "output_library": "您的成品库路径"

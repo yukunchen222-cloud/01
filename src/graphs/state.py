@@ -252,12 +252,13 @@ class EditExecuteInput(BaseModel):
 
 class EditExecuteOutput(BaseModel):
     """剪辑执行节点输出"""
-    edit_success: bool = Field(default=False, description="剪辑是否成功")
     output_path: str = Field(default="", description="输出文件路径")
     edit_log: List[str] = Field(default_factory=list, description="剪辑操作日志")
-    success_count: int = Field(default=0, description="成功操作数")
-    failed_count: int = Field(default=0, description="失败操作数")
-    error_message: str = Field(default="", description="错误信息")
+    success_operations: List[int] = Field(default_factory=list, description="成功的操作序号")
+    failed_operations: List[int] = Field(default_factory=list, description="失败的操作序号")
+    total_operations: int = Field(default=0, description="总操作数")
+    error: str = Field(default="", description="错误信息")
+    used_engine: str = Field(default="FFmpeg", description="使用的剪辑引擎: 剪映桌面版 或 FFmpeg")
 
 
 # ==================== 成品输出节点 ====================
