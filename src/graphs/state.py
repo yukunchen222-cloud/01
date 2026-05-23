@@ -7,6 +7,23 @@ from pydantic import BaseModel, Field
 from utils.file.file import File
 
 
+# ==================== 视频分类节点输入输出 ====================
+class VideoClassifyInput(BaseModel):
+    """视频分类节点输入"""
+    video_path: str = Field(..., description="视频文件路径")
+    video_url: str = Field(default="", description="视频URL（如果有）")
+
+
+class VideoClassifyOutput(BaseModel):
+    """视频分类节点输出"""
+    drama_type: str = Field(..., description="识别出的短剧类型")
+    drama_type_confidence: float = Field(default=0.0, description="类型置信度")
+    content_summary: str = Field(default="", description="视频内容摘要")
+    key_elements: List[str] = Field(default=[], description="关键元素列表")
+    emotion_tone: str = Field(default="", description="情感基调")
+    suggested_style: str = Field(default="", description="建议剪辑风格")
+
+
 # ==================== 爆款Agent全局状态 ====================
 class GlobalState(BaseModel):
     """爆款Agent全局状态"""

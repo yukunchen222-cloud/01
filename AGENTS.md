@@ -39,6 +39,7 @@ python run_workflow.py
 
 | 节点名 | 文件位置 | 类型 | 功能描述 | 配置文件 |
 |-------|---------|------|---------|---------|
+| video_classify | `nodes/video_classify_node.py` | agent | 自动识别视频内容，判断短剧类型 | `config/video_classify_llm_cfg.json` |
 | material_analyze | `nodes/material_analyze_node.py` | agent | 分析素材视频，提取关键帧、字幕、内容摘要 | `config/material_analyze_llm_cfg.json` |
 | viral_search | `nodes/viral_search_node.py` | task | 搜索抖音/快手同类爆款视频 | - |
 | viral_analyze | `nodes/viral_analyze_node.py` | agent | 深度分析爆款视频，提取钩子、标题、封面模式 | `config/viral_analyze_llm_cfg.json` |
