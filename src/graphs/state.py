@@ -1,13 +1,13 @@
 """
-爆款Agent状态定义
-定义工作流的全局状态、图的输入输出、各节点的输入输出
+AI短剧推广自动剪辑工作流状态定义
+定义爆款Agent和剪辑Agent的全局状态、图的输入输出、各节点的输入输出
 """
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from utils.file.file import File
 
 
-# ==================== 全局状态定义 ====================
+# ==================== 爆款Agent全局状态 ====================
 class GlobalState(BaseModel):
     """爆款Agent全局状态"""
     # 素材相关
@@ -30,6 +30,38 @@ class GlobalState(BaseModel):
     review_passed: bool = Field(default=False, description="审核是否通过")
     revision_count: int = Field(default=0, description="返工次数")
     revision_history: List[Dict[str, Any]] = Field(default_factory=list, description="返工历史记录")
+
+
+# ==================== 剪辑Agent全局状态 ====================
+class EditGlobalState(BaseModel):
+    """剪辑Agent全局状态"""
+    # 策略相关
+    raw_strategy: str = Field(default="", description="原始剪辑策略JSON字符串")
+    edit_operations: List[Dict[str, Any]] = Field(default_factory=list, description="解析后的剪辑操作列表")
+    hook_config: Dict[str, Any] = Field(default_factory=dict, description="钩子配置")
+    audio_strategy: Dict[str, Any] = Field(default_factory=dict, description="音频策略")
+    
+    # 素材相关
+    material_path: str = Field(default="", description="素材文件路径")
+    material_info: Dict[str, Any] = Field(default_factory=dict, description="素材信息")
+    
+    # 剪辑执行
+    output_path: str = Field(default="", description="剪辑输出路径")
+    edit_log: List[str] = Field(default_factory=list, description="剪辑操作日志")
+    success_count: int = Field(default=0, description="成功操作数")
+    failed_count: int = Field(default=0, description="失败操作数")
+    
+    # 成品输出
+    final_output_path: str = Field(default="", description="最终成品路径")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="视频元数据")
+    title_suggestions: List[Dict[str, Any]] = Field(default_factory=list, description="标题建议")
+    cover_config: Dict[str, Any] = Field(default_factory=dict, description="封面配置")
+    
+    # 错误记录
+    error_count: int = Field(default=0, description="错误数量")
+    need_rework: bool = Field(default=False, description="是否需要返工")
+    error_patterns: Dict[str, Any] = Field(default_factory=dict, description="错误模式分析")
+    optimization_suggestions: List[str] = Field(default_factory=list, description="优化建议")
 
 
 # ==================== 图的输入输出定义 ====================
@@ -133,3 +165,133 @@ class ReviewCompareOutput(BaseModel):
     review_result: Dict[str, Any] = Field(default_factory=dict, description="审核详细结果")
     improvement_suggestions: List[str] = Field(default_factory=list, description="改进建议")
     score: float = Field(default=0.0, description="相似度得分(0-100)")
+
+
+# =====================================================
+#             剪辑Agent 节点状态定义
+# =====================================================
+
+# ==================== 剪辑图输入输出 ====================
+class EditGraphInput(BaseModel):
+    """剪辑Agent工作流输入"""
+    raw_strategy: str = Field(..., description="原始剪辑策略JSON字符串")
+    material_library: str = Field(default="~/Desktop/素材库", description="素材库路径")
+    material_filename: Optional[str] = Field(default=None, description="指定素材文件名，为空则自动选择最新")
+    output_library: str = Field(default="~/Desktop/成品库", description="成品库路径")
+
+
+class EditGraphOutput(BaseModel):
+    """剪辑Agent工作流输出"""
+    final_output_path: str = Field(default="", description="最终成品路径")
+    export_success: bool = Field(default=False, description="导出是否成功")
+    need_rework: bool = Field(default=False, description="是否需要返工")
+    error_message: str = Field(default="", description="错误信息")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="视频元数据")
+
+
+# ==================== 策略解析节点 ====================
+class StrategyParseInput(BaseModel):
+    """策略解析节点输入"""
+    raw_strategy: str = Field(..., description="原始剪辑策略JSON字符串")
+
+
+class StrategyParseOutput(BaseModel):
+    """策略解析节点输出"""
+    edit_operations: List[Dict[str, Any]] = Field(default_factory=list, description="剪辑操作列表")
+    hook_config: Dict[str, Any] = Field(default_factory=dict, description="钩子配置")
+    title_suggestions: List[Dict[str, Any]] = Field(default_factory=list, description="标题建议")
+    cover_config: Dict[str, Any] = Field(default_factory=dict, description="封面配置")
+    audio_strategy: Dict[str, Any] = Field(default_factory=dict, description="音频策略")
+    overall_strategy: Dict[str, Any] = Field(default_factory=dict, description="整体策略")
+    parse_success: bool = Field(default=False, description="解析是否成功")
+    error_message: str = Field(default="", description="错误信息")
+
+
+# ==================== 素材加载节点 ====================
+class MaterialLoadInput(BaseModel):
+    """素材加载节点输入"""
+    material_library: str = Field(default="~/Desktop/素材库", description="素材库路径")
+    material_filename: Optional[str] = Field(default=None, description="指定素材文件名")
+
+
+class MaterialLoadOutput(BaseModel):
+    """素材加载节点输出"""
+    load_success: bool = Field(default=False, description="加载是否成功")
+    error_message: str = Field(default="", description="错误信息")
+    material_path: str = Field(default="", description="素材文件路径（工作目录）")
+    original_material_path: str = Field(default="", description="原始素材路径")
+    material_info: Dict[str, Any] = Field(default_factory=dict, description="素材信息")
+
+
+# ==================== 剪辑执行节点 ====================
+class EditExecuteInput(BaseModel):
+    """剪辑执行节点输入"""
+    material_path: str = Field(..., description="素材文件路径")
+    edit_operations: List[Dict[str, Any]] = Field(..., description="剪辑操作列表")
+    hook_config: Dict[str, Any] = Field(default_factory=dict, description="钩子配置")
+    audio_strategy: Dict[str, Any] = Field(default_factory=dict, description="音频策略")
+
+
+class EditExecuteOutput(BaseModel):
+    """剪辑执行节点输出"""
+    edit_success: bool = Field(default=False, description="剪辑是否成功")
+    output_path: str = Field(default="", description="输出文件路径")
+    edit_log: List[str] = Field(default_factory=list, description="剪辑操作日志")
+    success_count: int = Field(default=0, description="成功操作数")
+    failed_count: int = Field(default=0, description="失败操作数")
+    error_message: str = Field(default="", description="错误信息")
+
+
+# ==================== 成品输出节点 ====================
+class OutputExportInput(BaseModel):
+    """成品输出节点输入"""
+    output_path: str = Field(..., description="剪辑输出路径")
+    output_library: str = Field(default="~/Desktop/成品库", description="成品库路径")
+    title_suggestions: List[Dict[str, Any]] = Field(default_factory=list, description="标题建议")
+    cover_config: Dict[str, Any] = Field(default_factory=dict, description="封面配置")
+    edit_log: List[str] = Field(default_factory=list, description="剪辑日志")
+    success_count: int = Field(default=0, description="成功操作数")
+    failed_count: int = Field(default=0, description="失败操作数")
+
+
+class OutputExportOutput(BaseModel):
+    """成品输出节点输出"""
+    export_success: bool = Field(default=False, description="导出是否成功")
+    error_message: str = Field(default="", description="错误信息")
+    final_output_path: str = Field(default="", description="最终成品路径")
+    metadata_path: str = Field(default="", description="元数据文件路径")
+    report_path: str = Field(default="", description="审核报告路径")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="视频元数据")
+
+
+# ==================== 错误记录节点 ====================
+class ErrorRecordInput(BaseModel):
+    """错误记录节点输入"""
+    edit_log: List[str] = Field(..., description="剪辑操作日志")
+    material_path: str = Field(default="", description="素材路径")
+    session_id: Optional[str] = Field(default=None, description="会话ID")
+    operation_types: Optional[List[str]] = Field(default=None, description="操作类型列表")
+
+
+class ErrorRecordOutput(BaseModel):
+    """错误记录节点输出"""
+    recorded: bool = Field(default=False, description="是否已记录")
+    error_count: int = Field(default=0, description="错误数量")
+    error_patterns: Dict[str, Any] = Field(default_factory=dict, description="错误模式分析")
+    optimization_suggestions: List[str] = Field(default_factory=list, description="优化建议")
+    need_rework: bool = Field(default=False, description="是否需要返工")
+    rework_reason: str = Field(default="", description="返工原因")
+
+
+# ==================== 返工条件节点 ====================
+class ReworkDecisionInput(BaseModel):
+    """返工决策节点输入"""
+    need_rework: bool = Field(..., description="是否需要返工")
+    failed_count: int = Field(default=0, description="失败操作数")
+    revision_count: int = Field(default=0, description="已返工次数")
+
+
+class ReworkDecisionOutput(BaseModel):
+    """返工决策节点输出"""
+    should_rework: bool = Field(default=False, description="是否应该返工")
+    max_revisions_reached: bool = Field(default=False, description="是否达到最大返工次数")
