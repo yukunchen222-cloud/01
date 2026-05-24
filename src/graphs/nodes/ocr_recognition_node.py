@@ -28,10 +28,12 @@ def ocr_recognition_node(
     image_file = state.image_file
     
     # 如果是查询模式而不是图片录入，直接返回空结果
-    if state.input_type != "image" or image_file is None:
+    input_type = state.input_type
+    if input_type != "image" or image_file is None:
         return OCROutput(
             ocr_text="",
-            confidence=0.0
+            confidence=0.0,
+            input_type=input_type
         )
     
     # 获取图片URL
@@ -90,5 +92,6 @@ def ocr_recognition_node(
     
     return OCROutput(
         ocr_text=ocr_text,
-        confidence=0.85
+        confidence=0.85,
+        input_type=input_type
     )

@@ -42,6 +42,7 @@ dependencies = [
     "pyautogui>=0.9.54",
     "pywinauto>=0.6.9",
     "playwright>=1.60.0",
+    "python-multipart>=0.0.29",
 ]
 
 [tool.uv]

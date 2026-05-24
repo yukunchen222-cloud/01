@@ -56,7 +56,10 @@ def nlu_extraction_node(
     
     # 渲染用户提示词
     up_tpl = Template(up)
-    user_prompt = up_tpl.render({"text_content": text_content})
+    user_prompt = up_tpl.render({
+        "text": text_content,
+        "input_source": state.input_type
+    })
     
     # 初始化LLM客户端
     llm_client = LLMClient(ctx=ctx)
@@ -99,7 +102,7 @@ def nlu_extraction_node(
                 "parse_error": "无法解析结构化数据"
             }
         
-        data_type = extracted_data.get("data_type", "sale")
+        data_type = extracted_data.get("data_type") or "sale"
         
     except Exception as e:
         extracted_data = {

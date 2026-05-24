@@ -8,7 +8,7 @@ from typing import Any, Dict, Iterable, AsyncIterable, AsyncGenerator, Optional
 import cozeloop
 import uvicorn
 import time
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from langchain_core.runnables import RunnableConfig
@@ -303,6 +303,37 @@ async def api_voice(request: Request):
         
         return {"success": True, **result}
     except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/upload")
+async def api_upload(file: UploadFile = File(...)):
+    """图片上传API - 上传图片到对象存储"""
+    from coze_coding_dev_sdk import StorageClient
+    
+    try:
+        ctx = new_context(method="api_upload")
+        storage_client = StorageClient(ctx=ctx)
+        
+        # 读取文件内容
+        content = await file.read()
+        
+        # 生成唯一文件名
+        import time
+        timestamp = int(time.time() * 1000)
+        filename = f"upload_{timestamp}_{file.filename}"
+        
+        # 上传到对象存储
+        result = storage_client.put_object(
+            key=f"uploads/{filename}",
+            data=content
+        )
+        
+        # 获取访问URL
+        url = result.get("url", "")
+        
+        return {"success": True, "url": url, "filename": filename}
+    except Exception as e:
+        logger.error(f"图片上传失败: {e}")
         return {"success": False, "error": str(e)}
 
 @app.post("/api/image")

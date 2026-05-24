@@ -27,10 +27,12 @@ def asr_recognition_node(
     audio_file = state.audio_file
     
     # 如果是查询模式而不是语音录入，直接返回空结果
-    if state.input_type != "voice" or audio_file is None:
+    input_type = state.input_type
+    if input_type != "voice" or audio_file is None:
         return ASROutput(
             recognized_text="",
-            confidence=0.0
+            confidence=0.0,
+            input_type=input_type
         )
     
     # 获取音频URL
@@ -58,5 +60,6 @@ def asr_recognition_node(
     
     return ASROutput(
         recognized_text=recognized_text,
-        confidence=0.9
+        confidence=0.9,
+        input_type=input_type
     )

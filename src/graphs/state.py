@@ -326,6 +326,7 @@ class ASROutput(BaseModel):
     """ASR语音识别节点输出"""
     recognized_text: str = Field(..., description="识别的文字内容")
     confidence: float = Field(default=0.0, description="识别置信度")
+    input_type: str = Field(default="voice", description="输入类型，用于路由判断")
 
 
 # 2. OCR 图片识别节点  
@@ -339,6 +340,7 @@ class OCROutput(BaseModel):
     """OCR图片识别节点输出"""
     ocr_text: str = Field(..., description="识别的文字内容")
     confidence: float = Field(default=0.0, description="识别置信度")
+    input_type: str = Field(default="image", description="输入类型，用于后续节点判断")
 
 
 # 3. NLU 数据提取节点
