@@ -805,7 +805,38 @@ async def get_dashboard_data(
         total_returns = sum(r.get("total_amount", 0) for r in records if r.get("type") == "return" and r.get("status") == "approved")
         gross_profit = total_revenue - total_cost - total_returns
         gross_margin = (gross_profit / total_revenue * 100) if total_revenue > 0 else 0
-        net_profit = gross_profit - total_expense
+        
+        # Bug1修复：固定费用按门店分摊+按时间窗口缩放
+        total_fixed = total_expense  # expense类型的总额
+        store_count = len(store_stats) if store_stats else 1
+        if store_id and store_id != "all" and store_count > 1:
+            # 单店视图：固定费用按门店数均摊
+            total_fixed = total_fixed / store_count
+        
+        # 按时间窗口缩放（period天数/30天）
+        period_days = 30  # 默认月
+        if start_date and end_date:
+            try:
+                sd = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+                ed = datetime.datetime.strptime(end_date, "%Y-%m-%d")
+                period_days = max((ed - sd).days, 1)
+            except ValueError:
+                pass
+        elif period == "day":
+            period_days = 1
+        elif period == "year":
+            period_days = 365
+        # 按门店分摊固定费用
+        selected_store = request.query_params.get("store_id", "all") if request else "all"
+        if selected_store and selected_store != "all":
+            store_count = len(store_stats) if store_stats else 1
+            if store_count > 0:
+                total_fixed = total_fixed / store_count
+        
+        # 按时间窗口缩放
+        total_fixed = total_fixed * (period_days / 30.0)
+        
+        net_profit = gross_profit - total_fixed
         net_margin = (net_profit / total_revenue * 100) if total_revenue > 0 else 0
         transaction_count = len([r for r in records if r.get("type") in ("revenue", "purchase", "return") and r.get("status") == "approved"])
         
@@ -824,24 +855,33 @@ async def get_dashboard_data(
             elif r.get("type") == "purchase":
                 store_stats[sid]["cost"] += r.get("total_amount", 0)
         
-        # 品类统计：统计所有类型（revenue/purchase/return/expense）
-        category_stats = {}
+        # Bug3修复：品类拆分 - 销售品类 vs 支出品类
+        sales_categories = {}   # 只放商品销售（连衣裙/衬衫/裤装/外套）
+        expense_categories = {} # 只放支出科目（房租/人工/水电）
         for r in records:
             if r.get("status") != "approved":
                 continue
             rtype = r.get("type", "")
             cat = r.get("category", "其他")
             amount = r.get("total_amount", 0)
-            if cat not in category_stats:
-                category_stats[cat] = {"revenue": 0, "cost": 0, "return": 0, "expense": 0}
-            if rtype == "revenue":
-                category_stats[cat]["revenue"] += amount
-            elif rtype == "purchase":
-                category_stats[cat]["cost"] += amount
-            elif rtype == "return":
-                category_stats[cat]["return"] += amount
+            if rtype in ("revenue", "purchase", "return"):
+                # 商品品类
+                if cat not in sales_categories:
+                    sales_categories[cat] = {"revenue": 0, "cost": 0, "return": 0}
+                if rtype == "revenue":
+                    sales_categories[cat]["revenue"] += amount
+                elif rtype == "purchase":
+                    sales_categories[cat]["cost"] += amount
+                elif rtype == "return":
+                    sales_categories[cat]["return"] += amount
             elif rtype == "expense":
-                category_stats[cat]["expense"] += amount
+                # 支出科目
+                expense_categories[cat] = expense_categories.get(cat, 0) + amount
+        
+        # Bug2修复：前端兼容 - category_stats使用sales_categories（纯数字格式）
+        category_stats = {}
+        for cat, vals in sales_categories.items():
+            category_stats[cat] = vals.get("revenue", 0)
         
         # 固定费用
         fixed_expenses = {"rent": 0, "utilities": 0, "salary": 0, "other": 0}
@@ -933,6 +973,8 @@ async def get_dashboard_data(
                 },
                 "store_stats": store_stats,
                 "category_stats": category_stats,
+                "sales_categories": sales_categories,
+                "expense_categories": expense_categories,
                 "trend_data": trend_data,
                 "product_analysis": {
                     "top_sellers": top_sellers,
@@ -944,6 +986,78 @@ async def get_dashboard_data(
         }
     except Exception as e:
         logger.error(f"获取看板数据失败: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/analysis")
+async def get_analysis(request: Request, period: str = "month", store_id: str = "all"):
+    """款式分析API - 畅销款/滞销款/补货建议"""
+    try:
+        records = _fetch_records(request, store_id=store_id)
+        product_sales: Dict[str, Any] = {}
+        for record in records:
+            if record.get("type") not in ("revenue", "purchase"):
+                continue
+            items = record.get("items", [])
+            if isinstance(items, str):
+                try:
+                    items = json.loads(items)
+                except Exception:
+                    items = []
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                name = item.get("name", "未知")
+                if name not in product_sales:
+                    product_sales[name] = {"name": name, "category": item.get("category", ""), "quantity": 0, "revenue": 0.0, "cost": 0.0}
+                qty = item.get("quantity", 1)
+                amt = item.get("amount", 0)
+                if record.get("type") == "revenue":
+                    product_sales[name]["quantity"] += qty
+                    product_sales[name]["revenue"] += amt
+                elif record.get("type") == "purchase":
+                    product_sales[name]["cost"] += amt
+
+        sorted_products = sorted(product_sales.values(), key=lambda x: x["revenue"], reverse=True)
+        top_sellers = sorted_products[:5]
+        slow_sellers = sorted_products[-3:] if len(sorted_products) >= 3 else []
+
+        # 补货建议：库存<10或近期无销量
+        restock_suggestions = []
+        for p in slow_sellers:
+            if p["quantity"] < 10:
+                restock_suggestions.append({"name": p["name"], "category": p["category"], "reason": f"销量偏低({p['quantity']}件),建议补货", "suggested_qty": 20})
+
+        return {"success": True, "top_sellers": top_sellers, "slow_sellers": slow_sellers, "restock_suggestions": restock_suggestions}
+    except Exception as e:
+        logger.error(f"款式分析失败: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/alerts")
+async def get_alerts(request: Request, period: str = "month"):
+    """异常预警API"""
+    try:
+        records = _fetch_records(request)
+        approved = [r for r in records if r.get("status") == "approved"]
+        alerts = []
+        total_revenue = sum(r.get("total_amount", 0) for r in approved if r.get("type") == "revenue")
+        total_cost = sum(r.get("total_amount", 0) for r in approved if r.get("type") in ("purchase", "expense"))
+        total_returns = sum(r.get("total_amount", 0) for r in approved if r.get("type") == "return")
+
+        gross_profit = total_revenue - total_cost
+        gross_margin = (gross_profit / total_revenue * 100) if total_revenue > 0 else 0
+
+        if gross_margin < 30 and total_revenue > 0:
+            alerts.append({"type": "low_margin", "level": "warning" if gross_margin > 20 else "critical", "message": f"毛利率{gross_margin:.1f}%偏低，建议检查进货成本", "value": gross_margin})
+        if total_returns > total_revenue * 0.1 and total_revenue > 0:
+            alerts.append({"type": "high_returns", "level": "warning", "message": f"退货率达{total_returns/total_revenue*100:.1f}%，需关注商品质量", "value": total_returns/total_revenue*100})
+        if total_revenue == 0 and len(approved) > 0:
+            alerts.append({"type": "zero_revenue", "level": "critical", "message": "期间内无营收记录", "value": 0})
+        if not alerts:
+            alerts.append({"type": "info", "level": "info", "message": "暂无异常，经营状况正常", "value": 0})
+
+        return {"success": True, "alerts": alerts}
+    except Exception as e:
+        logger.error(f"异常预警失败: {e}")
         return {"success": False, "error": str(e)}
 
 @app.get("/api/reviews")

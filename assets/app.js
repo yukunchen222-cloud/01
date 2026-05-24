@@ -432,13 +432,18 @@ function renderCategoryStats(categoryStats) {
     const container = document.getElementById('categoryStats');
     if (!container) return;
     
-    const total = Object.values(categoryStats).reduce((a, b) => a + b, 0);
+    // 兼容新旧格式：新格式是纯数字，旧格式是{revenue:100,...}
+    const entries = Object.entries(categoryStats).map(([name, value]) => {
+        const amount = (typeof value === 'object' && value !== null) ? (value.revenue || 0) : (value || 0);
+        return [name, amount];
+    });
+    const total = entries.reduce((sum, [_, v]) => sum + v, 0);
     if (total === 0) {
         container.innerHTML = '<div style="padding:12px;color:var(--text-secondary);">暂无品类数据</div>';
         return;
     }
     
-    container.innerHTML = Object.entries(categoryStats).map(([name, value]) => {
+    container.innerHTML = entries.map(([name, value]) => {
         const percent = total > 0 ? (value / total * 100).toFixed(1) : 0;
         return `
             <div class="category-item">
@@ -473,16 +478,15 @@ function renderFixedExpenses(expenses) {
 
 // 加载款式分析数据
 function loadAnalysisData() {
-    authFetch(`${API_BASE}/api/dashboard?period=${currentPeriod}&store_id=${currentStore}`)
+    authFetch(`${API_BASE}/api/analysis?period=${currentPeriod}&store_id=${currentStore}`)
         .then(res => res.json())
         .then(data => {
             if (!data.success) return;
-            const analysis = data.dashboard_data?.product_analysis || {};
             
             // 畅销排行
             const topSellers = document.getElementById('topSellers');
             if (topSellers) {
-                const sellers = analysis.top_sellers || [];
+                const sellers = data.top_sellers || [];
                 if (sellers.length === 0) {
                     topSellers.innerHTML = '<div style="padding:20px;color:var(--text-secondary);text-align:center;">暂无销售数据</div>';
                 } else {
@@ -491,9 +495,9 @@ function loadAnalysisData() {
                             <span class="rank-number ${index < 3 ? 'top3' : ''}">${index + 1}</span>
                             <div class="rank-info">
                                 <div class="rank-name">${item.name}</div>
-                                <div class="rank-sales">已售 ${item.quantity} 件 · ${item.category || ''}</div>
+                                <div class="rank-sales">已售 ${item.quantity || 0} 件 · ${item.category || ''}</div>
                             </div>
-                            <span class="rank-value">${formatCurrency(item.revenue)}</span>
+                            <span class="rank-value">${formatCurrency(item.revenue || item.total_sales || 0)}</span>
                         </div>
                     `).join('');
                 }
@@ -502,7 +506,7 @@ function loadAnalysisData() {
             // 滞销预警
             const slowSellers = document.getElementById('slowSellers');
             if (slowSellers) {
-                const slows = analysis.slow_sellers || [];
+                const slows = data.slow_sellers || [];
                 if (slows.length === 0) {
                     slowSellers.innerHTML = '<div style="padding:20px;color:var(--success-color);text-align:center;"><i class="fas fa-check-circle"></i> 暂无滞销商品</div>';
                 } else {
@@ -536,11 +540,11 @@ function loadAnalysisData() {
 
 // 加载异常预警数据
 function loadAlertsData() {
-    authFetch(`${API_BASE}/api/dashboard?period=${currentPeriod}&store_id=${currentStore}`)
+    authFetch(`${API_BASE}/api/alerts?period=${currentPeriod}`)
         .then(res => res.json())
         .then(data => {
             if (!data.success) return;
-            const alerts = data.anomaly_alerts || [];
+            const alerts = data.alerts || [];
             const container = document.getElementById('alertsList');
             if (!container) return;
             
