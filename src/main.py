@@ -9,7 +9,8 @@ import cozeloop
 import uvicorn
 import time
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, END
 from langgraph.graph.state import CompiledStateGraph
@@ -236,8 +237,128 @@ class GraphService:
 service = GraphService()
 app = FastAPI()
 
+# 挂载静态文件目录
+import os
+_static_dir = os.path.join(os.getenv("COZE_WORKSPACE_PATH", "/workspace/projects"), "assets")
+if os.path.exists(_static_dir):
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
 # OpenAI 兼容接口处理器
 openai_handler = OpenAIChatHandler(service)
+
+# ==================== Web界面路由 ====================
+
+@app.get("/", response_class=HTMLResponse)
+async def web_home():
+    """Web界面首页"""
+    html_path = os.path.join(_static_dir, "index.html")
+    if os.path.exists(html_path):
+        with open(html_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>Web界面文件不存在</h1>", status_code=404)
+
+@app.get("/web", response_class=HTMLResponse)
+async def web_ui():
+    """Web界面入口"""
+    return await web_home()
+
+@app.get("/api/stores")
+async def get_stores():
+    """获取门店列表"""
+    stores = [
+        {"id": "store_001", "name": "中山路店", "address": "中山路128号"},
+        {"id": "store_002", "name": "解放路店", "address": "解放路256号"},
+        {"id": "store_003", "name": "人民广场店", "address": "人民广场东侧"},
+        {"id": "store_004", "name": "万达广场店", "address": "万达广场3楼"},
+        {"id": "store_005", "name": "银泰城店", "address": "银泰城2楼"},
+    ]
+    return {"success": True, "stores": stores}
+
+@app.post("/api/query")
+async def api_query(request: Request):
+    """查询看板数据API"""
+    try:
+        payload = await request.json()
+        input_type = payload.get("input_type", "query")
+        query_type = payload.get("query_type", "month")
+        store_id = payload.get("store_id")
+        
+        # 调用工作流
+        ctx = new_context(method="api_query")
+        result = await service.run(payload, ctx)
+        
+        return {"success": True, **result}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/voice")
+async def api_voice(request: Request):
+    """语音报账API"""
+    try:
+        payload = await request.json()
+        payload["input_type"] = "voice"
+        
+        ctx = new_context(method="api_voice")
+        result = await service.run(payload, ctx)
+        
+        return {"success": True, **result}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/image")
+async def api_image(request: Request):
+    """拍照录入API"""
+    try:
+        payload = await request.json()
+        payload["input_type"] = "image"
+        
+        ctx = new_context(method="api_image")
+        result = await service.run(payload, ctx)
+        
+        return {"success": True, **result}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/records")
+async def get_records(
+    store_id: str = None,
+    record_type: str = None,
+    page: int = 1,
+    page_size: int = 20
+):
+    """获取历史记录"""
+    # 示例数据
+    records = [
+        {
+            "id": "r001",
+            "store_id": "store_001",
+            "store_name": "中山路店",
+            "type": "sale",
+            "amount": 2580.00,
+            "category": "连衣裙",
+            "description": "红色连衣裙x2",
+            "created_at": "2024-05-24 14:30:00"
+        },
+        {
+            "id": "r002",
+            "store_id": "store_001",
+            "store_name": "中山路店",
+            "type": "expense",
+            "amount": 450.00,
+            "category": "水电费",
+            "description": "5月电费",
+            "created_at": "2024-05-24 10:00:00"
+        }
+    ]
+    return {
+        "success": True,
+        "records": records,
+        "total": len(records),
+        "page": page,
+        "page_size": page_size
+    }
+
+# ==================== 原有API路由 ====================
 
 
 HEADER_X_RUN_ID = "x-run-id"
