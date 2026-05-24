@@ -807,14 +807,29 @@ async def get_dashboard_data(
         gross_margin = (gross_profit / total_revenue * 100) if total_revenue > 0 else 0
         
         # Bug1修复：固定费用按门店分摊+按时间窗口缩放
-        total_fixed = total_expense  # expense类型的总额
-        store_count = len(store_stats) if store_stats else 1
-        if store_id and store_id != "all" and store_count > 1:
-            # 单店视图：固定费用按门店数均摊
-            total_fixed = total_fixed / store_count
+        # expense记录已按store_id筛选，total_expense就是当前视图的固定费用
+        total_fixed = total_expense
         
-        # 按时间窗口缩放（period天数/30天）
-        period_days = 30  # 默认月
+        # 按有营收记录的天数缩放固定费用
+        # 固定费用是月度预估值，如果数据只覆盖了部分天数，按比例缩放
+        revenue_dates = set()
+        for r in records:
+            if r.get("type") == "revenue" and r.get("status") == "approved" and r.get("created_at"):
+                try:
+                    revenue_dates.add(r["created_at"][:10])
+                except (IndexError, TypeError):
+                    pass
+        
+        if revenue_dates and total_revenue > 0:
+            # 有营收的天数占30天的比例
+            coverage_ratio = len(revenue_dates) / 30.0
+            # 如果覆盖率过低(数据不完整)，至少按1天算
+            coverage_ratio = max(coverage_ratio, 1/30.0)
+        else:
+            coverage_ratio = 1.0
+        
+        # 同时考虑用户选择的时间窗口
+        period_days = 30
         if start_date and end_date:
             try:
                 sd = datetime.datetime.strptime(start_date, "%Y-%m-%d")
@@ -826,16 +841,11 @@ async def get_dashboard_data(
             period_days = 1
         elif period == "year":
             period_days = 365
-        # 按门店分摊固定费用
-        selected_store = request.query_params.get("store_id", "all") if request else "all"
-        if selected_store and selected_store != "all":
-            store_count = len(store_stats) if store_stats else 1
-            if store_count > 0:
-                total_fixed = total_fixed / store_count
         
-        # 按时间窗口缩放
-        total_fixed = total_fixed * (period_days / 30.0)
-        
+        # 固定费用 = 月度费用 × 时间窗口缩放 × 数据覆盖率缩放
+        time_scale = period_days / 30.0
+        total_fixed = total_fixed * time_scale * coverage_ratio
+
         net_profit = gross_profit - total_fixed
         net_margin = (net_profit / total_revenue * 100) if total_revenue > 0 else 0
         transaction_count = len([r for r in records if r.get("type") in ("revenue", "purchase", "return") and r.get("status") == "approved"])
@@ -1033,31 +1043,189 @@ async def get_analysis(request: Request, period: str = "month", store_id: str = 
         return {"success": False, "error": str(e)}
 
 @app.get("/api/alerts")
-async def get_alerts(request: Request, period: str = "month"):
-    """异常预警API"""
+async def get_alerts(request: Request, period: str = "month", store_id: str = "all"):
+    """异常预警API - 规则引擎（5类异常检测）"""
     try:
-        records = _fetch_records(request)
+        user_info = get_user_from_request(request)
+        org_id = user_info.get("org_id", "org_default") if user_info else "org_default"
+
+        records = fetch_records_db(org_id=org_id)
+        if store_id and store_id != "all":
+            records = [r for r in records if r.get("store_id") == store_id]
+
         approved = [r for r in records if r.get("status") == "approved"]
-        alerts = []
+        alerts: List[Dict[str, Any]] = []
+
         total_revenue = sum(r.get("total_amount", 0) for r in approved if r.get("type") == "revenue")
-        total_cost = sum(r.get("total_amount", 0) for r in approved if r.get("type") in ("purchase", "expense"))
+        total_cost = sum(r.get("total_amount", 0) for r in approved if r.get("type") in ("purchase",))
+        total_expense = sum(r.get("total_amount", 0) for r in approved if r.get("type") == "expense")
         total_returns = sum(r.get("total_amount", 0) for r in approved if r.get("type") == "return")
 
         gross_profit = total_revenue - total_cost
         gross_margin = (gross_profit / total_revenue * 100) if total_revenue > 0 else 0
 
+        # 规则1: 毛利率异常
         if gross_margin < 30 and total_revenue > 0:
-            alerts.append({"type": "low_margin", "level": "warning" if gross_margin > 20 else "critical", "message": f"毛利率{gross_margin:.1f}%偏低，建议检查进货成本", "value": gross_margin})
+            level = "critical" if gross_margin < 20 else "warning"
+            alerts.append({"type": "low_margin", "level": level, "message": f"整体毛利率{gross_margin:.1f}%偏低(阈值30%)，建议检查进货成本", "value": round(gross_margin, 1), "threshold": 30})
+        if gross_margin < 0:
+            alerts.append({"type": "negative_margin", "level": "critical", "message": f"毛利率为负({gross_margin:.1f}%)，存在严重亏损风险", "value": round(gross_margin, 1)})
+
+        # 规则2: 门店营收偏离
+        store_rev: Dict[str, float] = {}
+        for r in approved:
+            if r.get("type") == "revenue":
+                sid = r.get("store_id", "unknown")
+                store_rev[sid] = store_rev.get(sid, 0) + r.get("total_amount", 0)
+        if store_rev:
+            avg_rev = sum(store_rev.values()) / len(store_rev)
+            for sid, rev in store_rev.items():
+                if avg_rev > 0 and rev > avg_rev * 1.5:
+                    alerts.append({"type": "store_high", "level": "info", "message": f"门店{sid}营收¥{rev:,.0f}超出均值50%，请确认数据无误", "value": rev, "store_id": sid})
+                if avg_rev > 0 and rev < avg_rev * 0.5:
+                    alerts.append({"type": "store_low", "level": "warning", "message": f"门店{sid}营收¥{rev:,.0f}低于均值50%，需关注经营状况", "value": rev, "store_id": sid})
+
+        # 规则3: 品类结构异常
+        cat_rev: Dict[str, float] = {}
+        for r in approved:
+            if r.get("type") == "revenue":
+                items = r.get("items", [])
+                if isinstance(items, str):
+                    try:
+                        items = json.loads(items)
+                    except Exception:
+                        items = []
+                if isinstance(items, list):
+                    for item in items:
+                        cat = item.get("category", "其他")
+                        cat_rev[cat] = cat_rev.get(cat, 0) + item.get("amount", 0)
+        if cat_rev and total_revenue > 0:
+            for cat, amt in cat_rev.items():
+                ratio = amt / total_revenue * 100
+                if ratio > 60:
+                    alerts.append({"type": "category_concentration", "level": "warning", "message": f"品类「{cat}」占营收{ratio:.1f}%，经营过于集中", "value": round(ratio, 1), "category": cat})
+
+        # 规则4: 退货率过高
         if total_returns > total_revenue * 0.1 and total_revenue > 0:
-            alerts.append({"type": "high_returns", "level": "warning", "message": f"退货率达{total_returns/total_revenue*100:.1f}%，需关注商品质量", "value": total_returns/total_revenue*100})
-        if total_revenue == 0 and len(approved) > 0:
-            alerts.append({"type": "zero_revenue", "level": "critical", "message": "期间内无营收记录", "value": 0})
+            return_rate = total_returns / total_revenue * 100
+            alerts.append({"type": "high_returns", "level": "warning" if return_rate < 20 else "critical", "message": f"退货率达{return_rate:.1f}%，需关注商品质量", "value": round(return_rate, 1), "threshold": 10})
+
+        # 规则5: 费用占比异常
+        if total_revenue > 0:
+            expense_ratio = (total_expense / total_revenue) * 100
+            if expense_ratio > 30:
+                alerts.append({"type": "high_expense", "level": "warning" if expense_ratio < 50 else "critical", "message": f"费用占营收{expense_ratio:.1f}%，高于30%警戒线", "value": round(expense_ratio, 1), "threshold": 30})
+
         if not alerts:
             alerts.append({"type": "info", "level": "info", "message": "暂无异常，经营状况正常", "value": 0})
 
-        return {"success": True, "alerts": alerts}
+        return {"success": True, "alerts": alerts, "summary": {"total_revenue": total_revenue, "total_cost": total_cost, "total_expense": total_expense, "total_returns": total_returns, "gross_margin": round(gross_margin, 1)}}
     except Exception as e:
         logger.error(f"异常预警失败: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/history")
+async def get_history(
+    request: Request,
+    page: int = 1,
+    page_size: int = 20,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    record_type: Optional[str] = None,
+    store_id: Optional[str] = None,
+    status: Optional[str] = None
+):
+    """历史记录查询（增强版，支持多维度筛选）"""
+    try:
+        user_info = get_user_from_request(request)
+        org_id = user_info.get("org_id", "org_default") if user_info else "org_default"
+
+        records = fetch_records_db(org_id=org_id)
+        if not records:
+            return {"success": True, "records": [], "total": 0, "page": page, "total_pages": 0}
+
+        # 筛选
+        filtered = []
+        for r in records:
+            if start_date and r.get("created_at", "")[:10] < start_date:
+                continue
+            if end_date and r.get("created_at", "")[:10] > end_date:
+                continue
+            if record_type and r.get("type") != record_type:
+                continue
+            if store_id and store_id != "all" and r.get("store_id") != store_id:
+                continue
+            if status and r.get("status") != status:
+                continue
+            filtered.append(r)
+
+        # 按时间倒序
+        filtered.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+
+        # 分页
+        total = len(filtered)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        start_idx = (page - 1) * page_size
+        page_records = filtered[start_idx:start_idx + page_size]
+
+        # 格式化时间戳
+        for r in page_records:
+            if "created_at" in r and r["created_at"]:
+                dt_str = r["created_at"]
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+                    r["created_at_display"] = dt.strftime("%Y-%m-%d %H:%M")
+                except Exception:
+                    r["created_at_display"] = dt_str[:16]
+
+        return {
+            "success": True,
+            "records": page_records,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages
+        }
+    except Exception as e:
+        logger.error(f"历史记录查询失败: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/pending_reviews")
+async def get_pending_reviews(request: Request):
+    """获取待审核记录（审核中心专用）"""
+    try:
+        user_info = get_user_from_request(request)
+        if not user_info:
+            return {"success": False, "error": "未登录"}
+
+        role = user_info.get("role", "")
+        if role not in ("owner", "manager"):
+            return {"success": False, "error": "无审核权限"}
+
+        org_id = user_info.get("org_id", "org_default")
+        records = fetch_records_db(org_id=org_id)
+
+        pending = [r for r in records if r.get("status") == "pending"]
+        approved = [r for r in records if r.get("status") == "approved"]
+        rejected = [r for r in records if r.get("status") == "rejected"]
+
+        # 按时间倒序
+        pending.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+
+        return {
+            "success": True,
+            "pending": pending,
+            "stats": {
+                "pending_count": len(pending),
+                "approved_count": len(approved),
+                "rejected_count": len(rejected),
+                "total_count": len(records)
+            },
+            "can_review": role in ("owner", "manager")
+        }
+    except Exception as e:
+        logger.error(f"待审核查询失败: {e}")
         return {"success": False, "error": str(e)}
 
 @app.get("/api/reviews")
