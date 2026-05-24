@@ -91,8 +91,8 @@ class JianyingController:
             
         if self.system == 'Windows':
             try:
-                from pywinauto import Application
-                self.pywinauto_app = Application
+                from pywinauto.application import Application  # type: ignore[misc]
+                self.pywinauto_app = Application  # type: ignore[misc]
                 logger.info("pywinauto 初始化成功")
             except ImportError:
                 logger.warning("pywinauto 未安装，请运行: pip install pywinauto")

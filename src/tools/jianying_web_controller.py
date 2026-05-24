@@ -313,7 +313,8 @@ class JianyingWebController:
                 # 拖拽到时间线
                 target = self.page.query_selector('[class*="timeline"], [class*="track"]')
                 if target:
-                    materials[material_index].drag_to(target)
+                    # type: ignore - Playwright ElementHandle has drag_to method
+                    materials[material_index].drag_to(target)  # type: ignore[attr-defined]
                     time.sleep(1)
             
             logger.info("✅ 素材已添加到时间线")

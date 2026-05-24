@@ -248,6 +248,205 @@ print(f"输出文件: {result['final_output_path']}")
 - 技术栈：Playwright/Selenium (浏览器自动化)、定时任务
 - 发布平台：抖音创作者平台（网页版）
 
+---
+
+# 服装连锁AI记账助手工作流
+
+## 项目概述
+- **名称**: 服装连锁AI记账助手
+- **功能**: 智能记账助手，支持语音报账、拍照录入、看板查询、异常预警、报告生成
+
+## 核心功能
+
+### 店长端
+- **语音报账**: 通过语音描述交易信息，自动识别并录入
+- **拍照录入**: 拍摄单据照片，OCR识别后自动提取数据
+- **历史记录**: 查看本店历史账目记录
+
+### 老板端
+- **数据看板**: 实时查看各门店经营数据
+- **门店对比**: 多门店业绩对比分析
+- **款式分析**: 畅销/滞销款式分析
+- **异常预警**: 自动检测异常数据并预警
+- **月报导出**: 自动生成月度经营报告
+
+## 工作流架构
+
+```
+                    ┌─────────────────┐
+                    │   GraphInput    │
+                    │ (input_type,    │
+                    │  audio_file/    │
+                    │  image_file/    │
+                    │  query_type)    │
+                    └────────┬────────┘
+                             │
+                  ┌──────────┴──────────┐
+                  │ route_input_type    │
+                  │   (条件分支)         │
+                  └──────────┬──────────┘
+                             │
+    ┌────────────────────────┼────────────────────────┐
+    │                        │                        │
+    ▼                        ▼                        ▼
+┌─────────┐           ┌─────────┐             ┌──────────┐
+│ 语音报账 │           │ 拍照录入 │             │看板查询  │
+│ 分支    │           │ 分支    │             │  分支    │
+└────┬────┘           └────┬────┘             └────┬─────┘
+     │                     │                       │
+     ▼                     ▼                       │
+┌─────────┐           ┌─────────┐                 │
+│ ASR识别 │           │ OCR识别 │                 │
+└────┬────┘           └────┬────┘                 │
+     │                     │                       │
+     └─────────┬───────────┘                       │
+               │                                   │
+               ▼                                   │
+        ┌────────────┐                             │
+        │ NLU数据提取│                             │
+        └─────┬──────┘                             │
+              │                                    │
+              ▼                                    │
+        ┌────────────┐                             │
+        │ 数据校验   │                             │
+        └─────┬──────┘                             │
+              │                                    │
+              └────────────────────────────────────┘
+                                                   │
+                                                   ▼
+                                            ┌──────────┐
+                                            │ 数据聚合 │
+                                            └────┬─────┘
+                                                 │
+                                                 ▼
+                                            ┌──────────┐
+                                            │ 异常检测 │
+                                            └────┬─────┘
+                                                 │
+                                                 ▼
+                                            ┌──────────┐
+                                            │ 报告生成 │
+                                            └────┬─────┘
+                                                 │
+                                                 ▼
+                                            ┌──────────┐
+                                            │GraphOutput│
+                                            └──────────┘
+```
+
+## 节点清单
+
+| 节点名 | 文件位置 | 类型 | 功能描述 | 配置文件 |
+|-------|---------|------|---------|---------|
+| asr_recognition | `nodes/asr_recognition_node.py` | task | 语音识别，将语音转换为文字 | - |
+| ocr_recognition | `nodes/ocr_recognition_node.py` | agent | 图片OCR识别，提取账目信息 | - |
+| nlu_extraction | `nodes/nlu_extraction_node.py` | agent | NLU数据提取，从文本提取结构化数据 | `config/nlu_extraction_cfg.json` |
+| data_validation | `nodes/data_validation_node.py` | task | 数据校验，验证数据完整性 | - |
+| data_aggregation | `nodes/data_aggregation_node.py` | task | 数据聚合，生成看板统计 | - |
+| anomaly_detection | `nodes/anomaly_detection_node.py` | agent | 异常检测，识别异常数据 | `config/anomaly_detection_cfg.json` |
+| report_generation | `nodes/report_generation_node.py` | agent | 报告生成，生成经营分析报告 | `config/report_generation_cfg.json` |
+| route_input_type | `graph.py` | condition | 路由输入类型 | - |
+
+**类型说明**: task(任务节点) / agent(大模型节点) / condition(条件分支)
+
+## 技能使用
+
+### 大语言模型 (LLM)
+- **OCR识别**: 使用多模态模型 `doubao-seed-2-0-lite-260215` 识别图片中的文字
+- **NLU提取**: 使用 `doubao-seed-2-0-lite-260215` 从文本提取结构化数据
+- **异常检测**: 使用 `doubao-seed-2-0-mini-260215` 智能分析异常
+- **报告生成**: 使用 `doubao-seed-2-0-lite-260215` 生成经营报告
+
+### 语音识别 (ASR)
+- 将语音文件转换为文字，支持多种音频格式
+
+### 对象存储
+- 生成的报告文件可上传到对象存储
+
+## 配置文件
+
+| 配置文件 | 用途 | 模型 |
+|---------|-----|------|
+| `config/nlu_extraction_cfg.json` | NLU数据提取 | doubao-seed-2-0-lite-260215 |
+| `config/anomaly_detection_cfg.json` | 异常检测 | doubao-seed-2-0-mini-260215 |
+| `config/report_generation_cfg.json` | 报告生成 | doubao-seed-2-0-lite-260215 |
+
+## 使用示例
+
+### 1. 看板查询
+```python
+from graphs.graph import main_graph
+
+result = main_graph.invoke({
+    "input_type": "query",
+    "query_type": "month"  # day/month/year
+})
+
+print(result["dashboard_data"])
+print(result["report_url"])
+```
+
+### 2. 语音报账
+```python
+from graphs.graph import main_graph
+from utils.file.file import File
+
+result = main_graph.invoke({
+    "input_type": "voice",
+    "audio_file": {"url": "audio_url", "file_type": "audio"},
+    "store_id": "store_001",
+    "store_name": "中山路店"
+})
+
+print(result["report_summary"])
+```
+
+### 3. 拍照录入
+```python
+from graphs.graph import main_graph
+from utils.file.file import File
+
+result = main_graph.invoke({
+    "input_type": "image",
+    "image_file": {"url": "image_url", "file_type": "image"},
+    "store_id": "store_001",
+    "store_name": "中山路店"
+})
+
+print(result["dashboard_data"])
+```
+
+## 数据结构
+
+### GraphInput
+```python
+{
+    "input_type": "voice" | "image" | "query",  # 输入类型
+    "audio_file": File,  # 语音文件（voice模式）
+    "image_file": File,  # 图片文件（image模式）
+    "query_type": "day" | "month" | "year",  # 查询类型
+    "store_id": str,  # 门店ID
+    "store_name": str  # 门店名称
+}
+```
+
+### GraphOutput
+```python
+{
+    "dashboard_data": dict,  # 看板数据
+    "anomaly_alerts": list,  # 异常预警列表
+    "report_url": str,  # 生成的报告URL
+    "report_summary": str  # 报告摘要
+}
+```
+
+## 后续开发计划
+
+- [ ] 接入真实数据库存储账目记录
+- [ ] 添加用户认证和权限管理
+- [ ] 支持更多图表类型的数据看板
+- [ ] 集成消息推送（飞书/企业微信）通知异常预警
+
 ### 剪映桌面版集成 (待完善)
 - 当前使用FFmpeg进行视频处理
 - 可扩展为使用pyautogui控制剪映桌面版
