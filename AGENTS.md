@@ -241,6 +241,42 @@ result = edit_graph.invoke({
 print(f"输出文件: {result['final_output_path']}")
 ```
 
+## Web界面
+
+### 启动Web服务
+```bash
+cd /workspace/projects
+PYTHONPATH=/workspace/projects/src:/workspace/projects python -m uvicorn src.web_server:app --host 0.0.0.0 --port 8080
+```
+
+### 访问地址
+- **主页面**: http://localhost:8080/
+- **健康检查**: http://localhost:8080/health
+
+### 功能页面
+| 页面 | 路径 | 功能 |
+|-----|------|------|
+| 数据看板 | 点击"数据看板" | 查看营收、毛利、毛利率等核心指标 |
+| 语音报账 | 点击"语音报账" | 录音并自动识别录入账目 |
+| 拍照录入 | 点击"拍照录入" | 上传单据图片自动识别 |
+| 历史记录 | 点击"历史记录" | 查看所有交易记录 |
+| 报告中心 | 点击"报告中心" | 生成各类经营报告 |
+
+### API接口
+| 接口 | 方法 | 说明 |
+|-----|------|------|
+| `/api/query` | POST | 查询看板数据 |
+| `/api/voice` | POST | 语音报账 |
+| `/api/image` | POST | 拍照录入 |
+| `/api/stores` | GET | 获取门店列表 |
+| `/api/records` | GET | 获取历史记录 |
+
+### 前端文件
+- `assets/index.html` - 主页面HTML
+- `assets/styles.css` - 样式文件
+- `assets/app.js` - 交互脚本
+- `src/web_server.py` - 后端服务器
+
 ## 后续开发计划
 
 ### 投放Agent (待开发)
