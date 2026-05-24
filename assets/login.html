@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>服装连锁AI记账助手 - 登录</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .login-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .logo-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            font-size: 40px;
+        }
+        
+        .logo h1 {
+            color: #1a1a2e;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        .logo p {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            color: #333;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .role-select {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+        
+        .role-btn {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        
+        .role-btn:hover {
+            border-color: #667eea;
+        }
+        
+        .role-btn.active {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .role-btn .icon {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        
+        .role-btn .text {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .login-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .error-msg {
+            background: #fee;
+            color: #c00;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            font-size: 14px;
+        }
+        
+        .demo-accounts {
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid #eee;
+        }
+        
+        .demo-accounts h3 {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+        
+        .demo-account {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .demo-account:hover {
+            background: #e9ecef;
+        }
+        
+        .demo-account .role {
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .demo-account .account {
+            color: #666;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <div class="logo-icon">👔</div>
+            <h1>服装连锁AI记账助手</h1>
+            <p>智能记账，轻松管理</p>
+        </div>
+        
+        <div class="error-msg" id="errorMsg"></div>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <label>用户名</label>
+                <input type="text" id="username" placeholder="请输入用户名" required>
+            </div>
+            
+            <div class="form-group">
+                <label>密码</label>
+                <input type="password" id="password" placeholder="请输入密码" required>
+            </div>
+            
+            <div class="form-group">
+                <label>登录身份</label>
+                <div class="role-select">
+                    <div class="role-btn active" data-role="owner" onclick="selectRole('owner')">
+                        <div class="icon">👔</div>
+                        <div class="text">老板</div>
+                    </div>
+                    <div class="role-btn" data-role="manager" onclick="selectRole('manager')">
+                        <div class="icon">🏪</div>
+                        <div class="text">店长</div>
+                    </div>
+                    <div class="role-btn" data-role="accountant" onclick="selectRole('accountant')">
+                        <div class="icon">📊</div>
+                        <div class="text">会计</div>
+                    </div>
+                </div>
+            </div>
+            
+            <button type="submit" class="login-btn" id="loginBtn">登 录</button>
+        </form>
+        
+        <div class="demo-accounts">
+            <h3>演示账号（密码：123456）</h3>
+            <div class="demo-account" onclick="fillDemo('boss', 'owner')">
+                <span class="role">👔 老板端</span>
+                <span class="account">boss</span>
+            </div>
+            <div class="demo-account" onclick="fillDemo('manager1', 'manager')">
+                <span class="role">🏪 店长端</span>
+                <span class="account">manager1</span>
+            </div>
+            <div class="demo-account" onclick="fillDemo('accountant', 'accountant')">
+                <span class="role">📊 会计端</span>
+                <span class="account">accountant</span>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let selectedRole = 'owner';
+        
+        function selectRole(role) {
+            selectedRole = role;
+            document.querySelectorAll('.role-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.role === role);
+            });
+        }
+        
+        function fillDemo(username, role) {
+            document.getElementById('username').value = username;
+            document.getElementById('password').value = '123456';
+            selectRole(role);
+        }
+        
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('loginBtn');
+            const errorMsg = document.getElementById('errorMsg');
+            
+            loginBtn.disabled = true;
+            loginBtn.textContent = '登录中...';
+            errorMsg.style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, role: selectedRole })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    
+                    // 根据角色跳转到不同页面
+                    if (data.user.role === 'manager') {
+                        window.location.href = '/mobile.html';
+                    } else {
+                        window.location.href = '/';
+                    }
+                } else {
+                    errorMsg.textContent = data.message || '登录失败，请检查用户名和密码';
+                    errorMsg.style.display = 'block';
+                }
+            } catch (error) {
+                errorMsg.textContent = '网络错误，请稍后重试';
+                errorMsg.style.display = 'block';
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = '登 录';
+            }
+        });
+        
+        // 检查是否已登录
+        const token = localStorage.getItem('token');
+        if (token) {
+            // 验证token有效性
+            fetch('/api/auth/verify', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.valid) {
+                    if (data.user.role === 'manager') {
+                        window.location.href = '/mobile.html';
+                    } else {
+                        window.location.href = '/';
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

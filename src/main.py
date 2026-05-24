@@ -389,6 +389,342 @@ async def get_records(
         "page_size": page_size
     }
 
+# ==================== 登录鉴权API ====================
+
+@app.post("/api/auth/login")
+async def api_login(request: Request):
+    """用户登录API"""
+    from utils.auth import get_user_by_username, verify_password, create_token, update_user_login
+    
+    try:
+        payload = await request.json()
+        username = payload.get("username", "")
+        password = payload.get("password", "")
+        
+        user = get_user_by_username(username)
+        if not user:
+            return {"success": False, "message": "用户不存在"}
+        
+        if not verify_password(password, user.password_hash):
+            return {"success": False, "message": "密码错误"}
+        
+        if not user.is_active:
+            return {"success": False, "message": "账号已被禁用"}
+        
+        # 生成Token
+        token = create_token(user.user_id, user.role, user.org_id, user.store_ids)
+        
+        # 更新登录时间
+        update_user_login(user.user_id)
+        
+        return {
+            "success": True,
+            "token": token,
+            "user": {
+                "user_id": user.user_id,
+                "username": user.username,
+                "name": user.name,
+                "role": user.role,
+                "org_id": user.org_id,
+                "store_ids": user.store_ids
+            }
+        }
+    except Exception as e:
+        logger.error(f"登录失败: {e}")
+        return {"success": False, "message": "登录失败，请稍后重试"}
+
+@app.post("/api/auth/verify")
+async def api_verify_token(request: Request):
+    """验证Token有效性"""
+    from utils.auth import decode_token, get_user_by_id
+    
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return {"valid": False, "message": "缺少Token"}
+    
+    token = auth_header[7:]
+    payload = decode_token(token)
+    
+    if not payload:
+        return {"valid": False, "message": "Token无效或已过期"}
+    
+    user = get_user_by_id(payload.get("user_id"))
+    if not user:
+        return {"valid": False, "message": "用户不存在"}
+    
+    return {
+        "valid": True,
+        "user": {
+            "user_id": user.user_id,
+            "username": user.username,
+            "name": user.name,
+            "role": user.role,
+            "org_id": user.org_id,
+            "store_ids": user.store_ids
+        }
+    }
+
+@app.post("/api/auth/logout")
+async def api_logout():
+    """用户登出"""
+    return {"success": True, "message": "登出成功"}
+
+# ==================== 商品管理API ====================
+
+@app.get("/api/products")
+async def get_products(request: Request):
+    """获取商品列表"""
+    from utils.auth import get_products_by_org, decode_token
+    
+    auth_header = request.headers.get("Authorization", "")
+    org_id = "org_default"  # 默认组织
+    
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        payload = decode_token(token)
+        if payload:
+            org_id = payload.get("org_id", org_id)
+    
+    products = get_products_by_org(org_id)
+    
+    return {
+        "success": True,
+        "products": [p.model_dump() for p in products],
+        "total": len(products)
+    }
+
+@app.post("/api/products")
+async def create_product_api(request: Request):
+    """创建商品"""
+    from utils.auth import create_product, decode_token
+    
+    auth_header = request.headers.get("Authorization", "")
+    org_id = "org_default"
+    
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        payload = decode_token(token)
+        if payload:
+            org_id = payload.get("org_id", org_id)
+    
+    try:
+        data = await request.json()
+        product = create_product(
+            org_id=org_id,
+            sku=data.get("sku", ""),
+            name=data.get("name", ""),
+            category=data.get("category", ""),
+            cost_price=float(data.get("cost_price", 0)),
+            sale_price=float(data.get("sale_price", 0)),
+            stock=int(data.get("stock", 0))
+        )
+        return {"success": True, "product": product.model_dump()}
+    except Exception as e:
+        logger.error(f"创建商品失败: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.put("/api/products/{product_id}")
+async def update_product_api(product_id: str, request: Request):
+    """更新商品"""
+    from utils.auth import _load_json_file, _save_json_file, PRODUCTS_FILE
+    
+    try:
+        data = await request.json()
+        
+        product_data = _load_json_file(PRODUCTS_FILE)
+        products = product_data.get("products", [])
+        
+        for i, p in enumerate(products):
+            if p.get("product_id") == product_id or p.get("sku") == product_id:
+                # 更新字段
+                products[i].update({
+                    "sku": data.get("sku", products[i].get("sku")),
+                    "name": data.get("name", products[i].get("name")),
+                    "category": data.get("category", products[i].get("category")),
+                    "cost_price": float(data.get("cost_price", 0)),
+                    "sale_price": float(data.get("sale_price", 0)),
+                    "stock": int(data.get("stock", 0))
+                })
+                product_data["products"] = products
+                _save_json_file(PRODUCTS_FILE, product_data)
+                return {"success": True, "product": products[i]}
+        
+        return {"success": False, "message": "商品不存在"}
+    except Exception as e:
+        logger.error(f"更新商品失败: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.delete("/api/products/{product_id}")
+async def delete_product_api(product_id: str):
+    """删除商品"""
+    from utils.auth import _load_json_file, _save_json_file, PRODUCTS_FILE
+    
+    try:
+        product_data = _load_json_file(PRODUCTS_FILE)
+        products = product_data.get("products", [])
+        
+        # 过滤掉要删除的商品
+        new_products = [p for p in products if p.get("product_id") != product_id and p.get("sku") != product_id]
+        
+        if len(new_products) == len(products):
+            return {"success": False, "message": "商品不存在"}
+        
+        product_data["products"] = new_products
+        _save_json_file(PRODUCTS_FILE, product_data)
+        
+        return {"success": True, "message": "删除成功"}
+    except Exception as e:
+        logger.error(f"删除商品失败: {e}")
+        return {"success": False, "message": str(e)}
+
+# ==================== 静态页面路由 ====================
+
+@app.get("/login.html", response_class=HTMLResponse)
+async def login_page():
+    """登录页面"""
+    html_path = os.path.join(_static_dir, "login.html")
+    if os.path.exists(html_path):
+        with open(html_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>登录页面不存在</h1>", status_code=404)
+
+@app.get("/mobile.html", response_class=HTMLResponse)
+async def mobile_page():
+    """店长移动端页面"""
+    html_path = os.path.join(_static_dir, "mobile.html")
+    if os.path.exists(html_path):
+        with open(html_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>移动端页面不存在</h1>", status_code=404)
+
+@app.get("/products.html", response_class=HTMLResponse)
+async def products_page():
+    """商品管理页面"""
+    html_path = os.path.join(_static_dir, "products.html")
+    if os.path.exists(html_path):
+        with open(html_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>商品管理页面不存在</h1>", status_code=404)
+
+# ==================== 门店管理API ====================
+
+@app.get("/api/stores/list")
+async def get_stores_list(request: Request):
+    """获取门店列表（带权限过滤）"""
+    from utils.auth import get_stores_by_org, decode_token
+    
+    auth_header = request.headers.get("Authorization", "")
+    org_id = "org_default"
+    user_store_ids = None
+    
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        payload = decode_token(token)
+        if payload:
+            org_id = payload.get("org_id", org_id)
+            user_store_ids = payload.get("store_ids")
+    
+    all_stores = get_stores_by_org(org_id)
+    
+    # 店长只能看到自己负责的门店
+    if user_store_ids is not None and payload.get("role") == "manager":
+        all_stores = [s for s in all_stores if s.store_id in user_store_ids]
+    
+    return {
+        "success": True,
+        "stores": [s.model_dump() for s in all_stores]
+    }
+
+# ==================== 语音/图片上传API ====================
+
+@app.post("/api/voice/upload")
+async def upload_voice(file: UploadFile = File(...), store_id: str = ""):
+    """语音上传并识别"""
+    from coze_coding_dev_sdk import AudioClient
+    from utils.auth import _load_json_file, _save_json_file
+    import tempfile
+    
+    try:
+        ctx = new_context(method="upload_voice")
+        
+        # 保存临时文件
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+        
+        # ASR识别
+        audio_client = AudioClient(ctx=ctx)
+        
+        with open(tmp_path, "rb") as audio_file:
+            result = audio_client.asr(audio_file.read())
+        
+        # 清理临时文件
+        os.unlink(tmp_path)
+        
+        recognized_text = result.get("text", "") if isinstance(result, dict) else str(result)
+        
+        # 调用工作流进行NLU提取
+        payload = {
+            "input_type": "voice",
+            "text": recognized_text,
+            "store_id": store_id
+        }
+        
+        nlu_result = await service.run(payload, ctx)
+        
+        return {
+            "success": True,
+            "recognized_text": recognized_text,
+            "extracted_data": nlu_result.get("extracted_data", {}),
+            **nlu_result
+        }
+    except Exception as e:
+        logger.error(f"语音上传失败: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/image/upload")
+async def upload_image(file: UploadFile = File(...), store_id: str = ""):
+    """图片上传并识别"""
+    from coze_coding_dev_sdk import StorageClient
+    
+    try:
+        ctx = new_context(method="upload_image")
+        
+        # 上传图片到对象存储
+        storage_client = StorageClient(ctx=ctx)
+        content = await file.read()
+        
+        import time
+        timestamp = int(time.time() * 1000)
+        filename = f"upload_{timestamp}_{file.filename}"
+        
+        result = storage_client.put_object(
+            key=f"images/{filename}",
+            data=content
+        )
+        
+        image_url = result.get("url", "")
+        
+        # 调用工作流进行OCR识别
+        payload = {
+            "input_type": "image",
+            "image_url": image_url,
+            "store_id": store_id
+        }
+        
+        ocr_result = await service.run(payload, ctx)
+        
+        return {
+            "success": True,
+            "image_url": image_url,
+            "extracted_data": ocr_result.get("extracted_data", {}),
+            **ocr_result
+        }
+    except Exception as e:
+        logger.error(f"图片上传失败: {e}")
+        return {"success": False, "error": str(e)}
+
 # ==================== 原有API路由 ====================
 
 

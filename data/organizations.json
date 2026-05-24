@@ -1,0 +1,20 @@
+{
+  "organizations": [
+    {
+      "org_id": "org_default",
+      "name": "示例服装连锁",
+      "plan": "pro",
+      "max_stores": 10,
+      "max_users": 20,
+      "settings": {
+        "fixed_expenses": {
+          "rent": 15000,
+          "utilities": 2000,
+          "salary": 50000,
+          "other": 3000
+        }
+      },
+      "created_at": "2026-05-24T18:58:21.942626"
+    }
+  ]
+}

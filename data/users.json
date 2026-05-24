@@ -1,0 +1,64 @@
+{
+  "users": [
+    {
+      "user_id": "user_355bab1c04c250f7",
+      "username": "boss",
+      "password_hash": "57e228cdf1dd42266e1cc0938dcf14132420f1f6f274458b6bb1a39eaff1b93b",
+      "role": "owner",
+      "org_id": "org_default",
+      "store_ids": [],
+      "name": "张总",
+      "phone": "13800138000",
+      "avatar": "",
+      "is_active": true,
+      "created_at": "2026-05-24T18:58:21.944816",
+      "last_login": "2026-05-24T18:58:26.123462"
+    },
+    {
+      "user_id": "user_900074de27b70bde",
+      "username": "manager1",
+      "password_hash": "57e228cdf1dd42266e1cc0938dcf14132420f1f6f274458b6bb1a39eaff1b93b",
+      "role": "manager",
+      "org_id": "org_default",
+      "store_ids": [
+        "store_001"
+      ],
+      "name": "李店长",
+      "phone": "13800138001",
+      "avatar": "",
+      "is_active": true,
+      "created_at": "2026-05-24T18:58:21.944873",
+      "last_login": "2026-05-24T18:58:29.832820"
+    },
+    {
+      "user_id": "user_a79ecc6ffb641d61",
+      "username": "manager2",
+      "password_hash": "57e228cdf1dd42266e1cc0938dcf14132420f1f6f274458b6bb1a39eaff1b93b",
+      "role": "manager",
+      "org_id": "org_default",
+      "store_ids": [
+        "store_002"
+      ],
+      "name": "王店长",
+      "phone": "13800138002",
+      "avatar": "",
+      "is_active": true,
+      "created_at": "2026-05-24T18:58:21.944887",
+      "last_login": ""
+    },
+    {
+      "user_id": "user_10ad0fce9bde649c",
+      "username": "accountant",
+      "password_hash": "57e228cdf1dd42266e1cc0938dcf14132420f1f6f274458b6bb1a39eaff1b93b",
+      "role": "accountant",
+      "org_id": "org_default",
+      "store_ids": [],
+      "name": "赵会计",
+      "phone": "13800138003",
+      "avatar": "",
+      "is_active": true,
+      "created_at": "2026-05-24T18:58:21.944896",
+      "last_login": ""
+    }
+  ]
+}

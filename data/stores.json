@@ -1,0 +1,39 @@
+{
+  "stores": [
+    {
+      "store_id": "store_001",
+      "org_id": "org_default",
+      "name": "中山路店",
+      "address": "中山路128号",
+      "status": "active"
+    },
+    {
+      "store_id": "store_002",
+      "org_id": "org_default",
+      "name": "人民广场店",
+      "address": "人民广场地铁站B口",
+      "status": "active"
+    },
+    {
+      "store_id": "store_003",
+      "org_id": "org_default",
+      "name": "南京路店",
+      "address": "南京路步行街88号",
+      "status": "active"
+    },
+    {
+      "store_id": "store_004",
+      "org_id": "org_default",
+      "name": "淮海路店",
+      "address": "淮海中路666号",
+      "status": "active"
+    },
+    {
+      "store_id": "store_005",
+      "org_id": "org_default",
+      "name": "徐家汇店",
+      "address": "徐家汇港汇广场",
+      "status": "active"
+    }
+  ]
+}
