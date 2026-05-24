@@ -623,10 +623,13 @@ async def update_record(record_id: str, request: Request):
 async def get_dashboard_data(
     request: Request,
     period: str = "month",
-    store_id: str = "all"
+    store_id: str = "all",
+    start_date: str = "",
+    end_date: str = ""
 ):
     """获取看板数据（真实统计）"""
     from utils.auth import _load_json_file, RECORDS_FILE, decode_token
+    import datetime
     
     try:
         record_data = _load_json_file(RECORDS_FILE)
@@ -657,18 +660,33 @@ async def get_dashboard_data(
         if store_id and store_id != "all":
             records = [r for r in records if r.get("store_id") == store_id]
         
-        # 日期过滤
-        import datetime
-        now = datetime.datetime.now()
-        if period == "day":
-            date_prefix = now.strftime("%Y-%m-%d")
-            records = [r for r in records if r.get("created_at", "").startswith(date_prefix)]
-        elif period == "month":
-            date_prefix = now.strftime("%Y-%m")
-            records = [r for r in records if r.get("created_at", "").startswith(date_prefix)]
-        elif period == "year":
-            date_prefix = now.strftime("%Y")
-            records = [r for r in records if r.get("created_at", "").startswith(date_prefix)]
+        # 日期过滤：支持自定义start_date/end_date和period两种模式
+        if start_date and end_date:
+            # 自定义日期范围
+            sd = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+            ed = datetime.datetime.strptime(end_date, "%Y-%m-%d") + datetime.timedelta(days=1)
+            filtered = []
+            for r in records:
+                try:
+                    rd = datetime.datetime.strptime(r.get("created_at", "")[:10], "%Y-%m-%d")
+                    if sd <= rd < ed:
+                        filtered.append(r)
+                except (ValueError, TypeError):
+                    pass
+            records = filtered
+            period = "custom"
+        else:
+            # 预设期间
+            now = datetime.datetime.now()
+            if period == "day":
+                date_prefix = now.strftime("%Y-%m-%d")
+                records = [r for r in records if r.get("created_at", "").startswith(date_prefix)]
+            elif period == "month":
+                date_prefix = now.strftime("%Y-%m")
+                records = [r for r in records if r.get("created_at", "").startswith(date_prefix)]
+            elif period == "year":
+                date_prefix = now.strftime("%Y")
+                records = [r for r in records if r.get("created_at", "").startswith(date_prefix)]
         
         # 统计汇总
         total_revenue = sum(r.get("total_amount", 0) for r in records if r.get("type") == "revenue" and r.get("status") == "approved")
@@ -696,13 +714,24 @@ async def get_dashboard_data(
             elif r.get("type") == "purchase":
                 store_stats[sid]["cost"] += r.get("total_amount", 0)
         
-        # 品类统计
+        # 品类统计：统计所有类型（revenue/purchase/return/expense）
         category_stats = {}
         for r in records:
-            if r.get("status") != "approved" or r.get("type") not in ("revenue",):
+            if r.get("status") != "approved":
                 continue
+            rtype = r.get("type", "")
             cat = r.get("category", "其他")
-            category_stats[cat] = category_stats.get(cat, 0) + r.get("total_amount", 0)
+            amount = r.get("total_amount", 0)
+            if cat not in category_stats:
+                category_stats[cat] = {"revenue": 0, "cost": 0, "return": 0, "expense": 0}
+            if rtype == "revenue":
+                category_stats[cat]["revenue"] += amount
+            elif rtype == "purchase":
+                category_stats[cat]["cost"] += amount
+            elif rtype == "return":
+                category_stats[cat]["return"] += amount
+            elif rtype == "expense":
+                category_stats[cat]["expense"] += amount
         
         # 固定费用
         fixed_expenses = {"rent": 0, "utilities": 0, "salary": 0, "other": 0}
@@ -718,6 +747,34 @@ async def get_dashboard_data(
                 fixed_expenses["salary"] += r.get("total_amount", 0)
             else:
                 fixed_expenses["other"] += r.get("total_amount", 0)
+        
+        # 趋势数据：按日汇总营收和成本
+        daily_data = {}
+        for r in records:
+            if r.get("status") != "approved":
+                continue
+            try:
+                day_str = r.get("created_at", "")[:10]  # YYYY-MM-DD
+            except (ValueError, TypeError):
+                continue
+            if not day_str:
+                continue
+            if day_str not in daily_data:
+                daily_data[day_str] = {"date": day_str, "revenue": 0, "cost": 0, "profit": 0}
+            rtype = r.get("type", "")
+            amount = r.get("total_amount", 0)
+            if rtype == "revenue":
+                daily_data[day_str]["revenue"] += amount
+            elif rtype == "purchase":
+                daily_data[day_str]["cost"] += amount
+            elif rtype == "return":
+                daily_data[day_str]["cost"] += amount
+            elif rtype == "expense":
+                daily_data[day_str]["cost"] += amount
+        # 计算利润并排序
+        for d in daily_data.values():
+            d["profit"] = d["revenue"] - d["cost"]
+        trend_data = sorted(daily_data.values(), key=lambda x: x["date"])
         
         # 商品销量统计
         product_sales = {}
@@ -766,6 +823,7 @@ async def get_dashboard_data(
                 },
                 "store_stats": store_stats,
                 "category_stats": category_stats,
+                "trend_data": trend_data,
                 "product_analysis": {
                     "top_sellers": top_sellers,
                     "slow_sellers": slow_sellers,
