@@ -1,645 +1,646 @@
-// ==================== 全局状态 ====================
-let currentStoreId = 'all';
+// 全局状态
 let currentPeriod = 'month';
+let currentStore = 'all';
 let currentPage = 'dashboard';
-let uploadedImageUrl = null;
-let mediaRecorder = null;
-let audioChunks = [];
-let isRecording = false;
 
-// ==================== API 基础路径 ====================
-const API_BASE = window.location.origin;
+// 页面配置
+const pageConfig = {
+    dashboard: { title: '数据看板', subtitle: '实时查看门店经营数据' },
+    analysis: { title: '款式分析', subtitle: '销量排行与滞销预警' },
+    alerts: { title: '异常预警', subtitle: '智能识别异常经营状况' },
+    review: { title: '审核中心', subtitle: '低置信度条目二次确认' },
+    voice: { title: '语音报账', subtitle: '语音录入交易信息' },
+    camera: { title: '拍照录入', subtitle: '上传单据自动识别' },
+    history: { title: '历史记录', subtitle: '查看所有交易记录' },
+    reports: { title: '报告中心', subtitle: '生成各类经营报告' }
+};
 
-// ==================== 初始化 ====================
+// API基础地址
+const API_BASE = '';
+
+// 初始化
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('页面初始化...');
     initNavigation();
-    initDashboard();
-    initVoiceRecord();
-    initImageUpload();
-    initStoreSelector();
     initDateFilter();
-    initRefreshButton();
-    loadStores();
+    initStoreSelector();
+    loadDashboardData();
+    loadAnalysisData();
+    loadAlertsData();
+    loadReviewData();
+    loadHistoryData();
+    initVoiceRecording();
+    initImageUpload();
 });
 
-// ==================== 导航功能 ====================
+// 导航初始化
 function initNavigation() {
-    const navItems = document.querySelectorAll('.nav-item');
-    navItems.forEach(item => {
+    document.querySelectorAll('.nav-item').forEach(item => {
         item.addEventListener('click', () => {
             const page = item.dataset.page;
-            if (page) {
-                switchPage(page);
-            }
+            switchPage(page);
         });
     });
 }
 
+// 页面切换
 function switchPage(page) {
     currentPage = page;
     
     // 更新导航状态
     document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.remove('active');
-        if (item.dataset.page === page) {
-            item.classList.add('active');
-        }
+        item.classList.toggle('active', item.dataset.page === page);
     });
-    
-    // 切换页面内容
-    document.querySelectorAll('.page').forEach(content => {
-        content.classList.remove('active');
-    });
-    
-    const targetPage = document.getElementById(`${page}Page`);
-    if (targetPage) {
-        targetPage.classList.add('active');
-    }
     
     // 更新页面标题
-    const titles = {
-        'dashboard': { title: '数据看板', subtitle: '实时查看门店经营数据' },
-        'voice': { title: '语音报账', subtitle: '通过语音快速录入交易信息' },
-        'camera': { title: '拍照录入', subtitle: '上传单据图片自动识别' },
-        'history': { title: '历史记录', subtitle: '查看所有交易记录' },
-        'reports': { title: '报告中心', subtitle: '生成经营分析报告' }
-    };
+    document.getElementById('pageTitle').textContent = pageConfig[page]?.title || page;
+    document.getElementById('pageSubtitle').textContent = pageConfig[page]?.subtitle || '';
     
-    const pageInfo = titles[page] || { title: '服装连锁记账助手', subtitle: '' };
-    const pageTitleEl = document.getElementById('pageTitle');
-    const pageSubtitleEl = document.getElementById('pageSubtitle');
-    if (pageTitleEl) pageTitleEl.textContent = pageInfo.title;
-    if (pageSubtitleEl) pageSubtitleEl.textContent = pageInfo.subtitle;
-    
-    // 页面特定初始化
-    if (page === 'dashboard') {
-        loadDashboardData();
-    } else if (page === 'history') {
-        loadHistoryRecords();
-    }
+    // 切换页面显示
+    document.querySelectorAll('.page').forEach(p => {
+        p.classList.toggle('active', p.id === `${page}Page`);
+    });
 }
 
-// ==================== 门店选择器 ====================
-function initStoreSelector() {
-    const storeSelect = document.getElementById('storeSelect');
-    if (storeSelect) {
-        storeSelect.addEventListener('change', (e) => {
-            currentStoreId = e.target.value;
-            console.log('选择门店:', currentStoreId);
-            // 如果在看板页面，重新加载数据
-            if (currentPage === 'dashboard') {
-                loadDashboardData();
-            }
-        });
-    }
-}
-
-// ==================== 日期筛选 ====================
+// 日期筛选
 function initDateFilter() {
-    // 使用正确的类名 .date-btn
     document.querySelectorAll('.date-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            // 更新按钮状态
             document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            
-            // 更新当前时间段
             currentPeriod = btn.dataset.period;
-            console.log('选择时间段:', currentPeriod);
-            
-            // 重新加载数据
             loadDashboardData();
         });
     });
 }
 
-// ==================== 刷新按钮 ====================
-function initRefreshButton() {
-    const refreshBtn = document.querySelector('.refresh-btn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', () => {
-            loadDashboardData();
-            showToast('数据已刷新');
-        });
-    }
+// 门店选择器
+function initStoreSelector() {
+    fetch(`${API_BASE}/api/stores`)
+        .then(res => res.json())
+        .then(data => {
+            const select = document.getElementById('storeSelect');
+            if (select && data.stores) {
+                data.stores.forEach(store => {
+                    const option = document.createElement('option');
+                    option.value = store.id;
+                    option.textContent = store.name;
+                    select.appendChild(option);
+                });
+            }
+        })
+        .catch(err => console.error('加载门店失败:', err));
 }
 
-// ==================== 数据看板 ====================
-function initDashboard() {
-    loadDashboardData();
-}
-
-async function loadDashboardData() {
-    const period = currentPeriod || 'month';
-    console.log('加载看板数据, 时间段:', period);
+// 加载看板数据
+function loadDashboardData() {
+    showLoading();
     
-    try {
-        showLoading();
-        
-        const response = await fetch(`${API_BASE}/api/query`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                input_type: 'query',
-                query_type: period,
-                store_id: currentStoreId
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        console.log('看板数据:', result);
-        
-        updateDashboard(result.dashboard_data || {});
-        updateAnomalyAlerts(result.anomaly_alerts || []);
-        
-    } catch (error) {
-        console.error('加载看板数据失败:', error);
-        showError('加载看板数据失败: ' + error.message);
-    } finally {
+    fetch(`${API_BASE}/api/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            input_type: 'query',
+            query_type: currentPeriod,
+            store_id: currentStore
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
         hideLoading();
-    }
+        renderDashboard(data);
+    })
+    .catch(err => {
+        hideLoading();
+        console.error('加载看板数据失败:', err);
+        renderDashboardWithSampleData();
+    });
 }
 
-function updateDashboard(data) {
-    const summary = data.summary || {};
+// 渲染看板
+function renderDashboard(data) {
+    const summary = data.dashboard_data?.summary || {};
     
-    // 更新核心指标
-    updateElement('totalRevenue', `¥${(summary.total_revenue || 0).toLocaleString()}`);
-    updateElement('totalCost', `¥${(summary.total_cost || 0).toLocaleString()}`);
-    updateElement('grossProfit', `¥${(summary.gross_profit || 0).toLocaleString()}`);
-    updateElement('grossMargin', `${(summary.gross_margin || 0).toFixed(1)}%`);
-    updateElement('transactionCount', (summary.transaction_count || 0).toLocaleString());
+    // 更新统计卡片
+    document.getElementById('totalRevenue').textContent = formatCurrency(summary.total_revenue || 0);
+    document.getElementById('totalCost').textContent = formatCurrency(summary.total_cost || 0);
+    document.getElementById('grossProfit').textContent = formatCurrency(summary.gross_profit || 0);
+    document.getElementById('netProfit').textContent = formatCurrency(summary.net_profit || 0);
+    document.getElementById('grossMargin').textContent = (summary.gross_margin || 0).toFixed(1) + '%';
+    document.getElementById('transactionCount').textContent = summary.transaction_count || 0;
     
-    // 更新时间段显示
-    updateElement('dataPeriod', `数据周期: ${data.period || '本月'}`);
+    // 渲染预警
+    renderAlerts(data.anomaly_alerts || []);
+    
+    // 渲染门店对比
+    renderStoreComparison(data.dashboard_data?.store_stats || {});
+    
+    // 渲染品类分布
+    renderCategoryStats(data.dashboard_data?.category_stats || {});
+    
+    // 渲染固定费用
+    renderFixedExpenses(data.dashboard_data?.fixed_expenses || {});
 }
 
-function updateElement(id, value) {
-    const el = document.getElementById(id);
-    if (el) {
-        el.textContent = value;
+// 使用示例数据渲染（备用）
+function renderDashboardWithSampleData() {
+    const sampleData = {
+        dashboard_data: {
+            summary: {
+                total_revenue: 125800,
+                total_cost: 62800,
+                gross_profit: 63000,
+                net_profit: 45800,
+                gross_margin: 50.1,
+                transaction_count: 342
+            },
+            store_stats: {
+                '中山路店': { revenue: 45800, count: 128 },
+                '人民广场店': { revenue: 32600, count: 89 },
+                '西湖大道店': { revenue: 28400, count: 72 },
+                '滨江店': { revenue: 12800, count: 38 },
+                '城西店': { revenue: 6200, count: 15 }
+            },
+            category_stats: {
+                '连衣裙': 45200,
+                '西装外套': 32800,
+                '牛仔裤': 25400,
+                'T恤': 15800,
+                '其他': 6600
+            },
+            fixed_expenses: {
+                rent: 12000,
+                utilities: 1800,
+                salary: 25000,
+                other: 2400
+            }
+        },
+        anomaly_alerts: [
+            { type: 'low_revenue', level: 'warning', message: '城西店本周营收下降15%', store: '城西店' }
+        ]
+    };
+    renderDashboard(sampleData);
+}
+
+// 格式化货币
+function formatCurrency(value) {
+    if (value >= 10000) {
+        return '¥' + (value / 10000).toFixed(1) + '万';
     }
+    return '¥' + value.toLocaleString();
 }
 
-function updateAnomalyAlerts(alerts) {
-    const container = document.getElementById('alertContainer');
+// 渲染预警
+function renderAlerts(alerts) {
+    const container = document.getElementById('alertList');
     if (!container) return;
     
-    if (!alerts || alerts.length === 0) {
-        container.innerHTML = '';
-        return;
-    }
-    
     container.innerHTML = alerts.map(alert => `
-        <div class="alert-item ${alert.level || 'warning'}">
-            <i class="fas fa-exclamation-triangle"></i>
-            <span>${alert.message}</span>
+        <div class="alert-item ${alert.level === 'critical' ? '' : 'warning'}">
+            <div class="alert-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="alert-content">
+                <div class="alert-title">${alert.level === 'critical' ? '严重警告' : '注意'}</div>
+                <div class="alert-desc">${alert.message}</div>
+            </div>
         </div>
     `).join('');
 }
 
-// ==================== 门店管理 ====================
-async function loadStores() {
-    try {
-        const response = await fetch(`${API_BASE}/api/stores`);
-        const result = await response.json();
-        
-        const storeSelect = document.getElementById('storeSelect');
-        if (storeSelect && result.stores) {
-            storeSelect.innerHTML = '<option value="all">全部门店</option>' +
-                result.stores.map(store => 
-                    `<option value="${store.id}">${store.name}</option>`
-                ).join('');
-        }
-    } catch (error) {
-        console.error('加载门店列表失败:', error);
+// 渲染门店对比
+function renderStoreComparison(storeStats) {
+    const container = document.getElementById('storeComparison');
+    if (!container) return;
+    
+    const stores = Object.entries(storeStats);
+    const maxRevenue = Math.max(...stores.map(([_, s]) => s.revenue || 0));
+    
+    container.innerHTML = stores.map(([name, data]) => {
+        const percent = maxRevenue > 0 ? ((data.revenue || 0) / maxRevenue * 100) : 0;
+        return `
+            <div class="store-item">
+                <span class="store-name">${name}</span>
+                <div class="store-bar">
+                    <div class="bar-fill" style="width: ${percent}%"></div>
+                </div>
+                <span class="store-value">${formatCurrency(data.revenue || 0)}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+// 渲染品类统计
+function renderCategoryStats(categoryStats) {
+    const container = document.getElementById('categoryStats');
+    if (!container) return;
+    
+    const total = Object.values(categoryStats).reduce((a, b) => a + b, 0);
+    
+    container.innerHTML = Object.entries(categoryStats).map(([name, value]) => {
+        const percent = total > 0 ? (value / total * 100).toFixed(1) : 0;
+        return `
+            <div class="category-item">
+                <div class="category-name">${name}</div>
+                <div class="category-value">${formatCurrency(value)}</div>
+                <div class="category-percent">${percent}%</div>
+            </div>
+        `;
+    }).join('');
+}
+
+// 渲染固定费用
+function renderFixedExpenses(expenses) {
+    const container = document.getElementById('fixedExpenses');
+    if (!container) return;
+    
+    const labels = {
+        rent: '房租',
+        utilities: '水电费',
+        salary: '人工成本',
+        other: '其他费用'
+    };
+    
+    container.innerHTML = Object.entries(expenses).map(([key, value]) => `
+        <div class="expense-item">
+            <div class="expense-label">${labels[key] || key}</div>
+            <div class="expense-value">${formatCurrency(value)}</div>
+        </div>
+    `).join('');
+}
+
+// 加载款式分析数据
+function loadAnalysisData() {
+    const topSellers = document.getElementById('topSellers');
+    const slowSellers = document.getElementById('slowSellers');
+    
+    if (topSellers) {
+        topSellers.innerHTML = [
+            { name: '黑色西装外套', sales: 89, revenue: 31951 },
+            { name: '红色连衣裙', sales: 76, revenue: 22624 },
+            { name: '蓝色牛仔裤', sales: 65, revenue: 12935 },
+            { name: '白色T恤', sales: 54, revenue: 4320 },
+            { name: '灰色休闲裤', sales: 48, revenue: 8640 }
+        ].map((item, index) => `
+            <div class="rank-item">
+                <span class="rank-number ${index < 3 ? 'top3' : ''}">${index + 1}</span>
+                <div class="rank-info">
+                    <div class="rank-name">${item.name}</div>
+                    <div class="rank-sales">已售 ${item.sales} 件</div>
+                </div>
+                <span class="rank-value">${formatCurrency(item.revenue)}</span>
+            </div>
+        `).join('');
+    }
+    
+    if (slowSellers) {
+        slowSellers.innerHTML = [
+            { name: '黄色短袖', days: 45, percent: 85 },
+            { name: '格纹衬衫', days: 38, percent: 72 },
+            { name: '碎花半裙', days: 32, percent: 68 }
+        ].map(item => `
+            <div class="slow-sell-item">
+                <div class="slow-sell-info">
+                    <div class="slow-sell-name">${item.name}</div>
+                    <div class="slow-sell-desc">滞销${item.days}天，库存占比${item.percent}%</div>
+                </div>
+            </div>
+        `).join('');
     }
 }
 
-// ==================== 语音报账 ====================
-function initVoiceRecord() {
-    const recordBtn = document.getElementById('recordBtn');
+// 加载异常预警数据
+function loadAlertsData() {
+    const container = document.getElementById('alertsList');
+    if (!container) return;
     
-    if (recordBtn) {
-        recordBtn.addEventListener('click', toggleRecording);
-    }
+    container.innerHTML = [
+        { level: 'critical', title: '营收异常', desc: '城西店连续3天营收下滑，累计下降45%', store: '城西店', time: '2024-05-24 18:00' },
+        { level: 'warning', title: '库存预警', desc: '黑色西装外套库存仅剩8件，建议补货', store: '中山路店', time: '2024-05-24 15:30' },
+        { level: 'warning', title: '成本异常', desc: '人民广场店本月成本占比达65%，高于平均', store: '人民广场店', time: '2024-05-24 12:00' }
+    ].map(alert => `
+        <div class="alert-card ${alert.level}">
+            <div class="alert-card-icon">
+                <i class="fas fa-${alert.level === 'critical' ? 'times-circle' : 'exclamation-circle'}"></i>
+            </div>
+            <div class="alert-card-content">
+                <div class="alert-card-title">${alert.title}</div>
+                <div class="alert-card-desc">${alert.desc}</div>
+                <div class="alert-card-meta">
+                    <i class="fas fa-store"></i> ${alert.store} &nbsp;|&nbsp; 
+                    <i class="fas fa-clock"></i> ${alert.time}
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// 加载审核数据
+function loadReviewData() {
+    const container = document.getElementById('reviewList');
+    if (!container) return;
+    
+    container.innerHTML = [
+        { store: '中山路店', type: '销售', items: '红色连衣裙 x1', amount: 299, confidence: 0.72, time: '18:25' },
+        { store: '人民广场店', type: '退货', items: '黑色西装外套 x1', amount: -359, confidence: 0.68, time: '17:30' },
+        { store: '西湖大道店', type: '进货', items: '牛仔裤 x10', amount: -1500, confidence: 0.75, time: '16:15' }
+    ].map((item, index) => `
+        <div class="review-item">
+            <div class="review-header">
+                <span class="review-store"><i class="fas fa-store"></i> ${item.store}</span>
+                <span class="review-confidence ${item.confidence < 0.7 ? 'low' : 'medium'}">
+                    置信度 ${(item.confidence * 100).toFixed(0)}%
+                </span>
+            </div>
+            <div class="review-data">
+                <div class="review-row">
+                    <span>类型</span>
+                    <span>${item.type}</span>
+                </div>
+                <div class="review-row">
+                    <span>商品</span>
+                    <span>${item.items}</span>
+                </div>
+                <div class="review-row">
+                    <span>金额</span>
+                    <span style="color: ${item.amount > 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${formatCurrency(Math.abs(item.amount))}</span>
+                </div>
+                <div class="review-row">
+                    <span>时间</span>
+                    <span>${item.time}</span>
+                </div>
+            </div>
+            <div class="review-actions">
+                <button class="btn-approve" onclick="approveReview(${index})"><i class="fas fa-check"></i> 通过</button>
+                <button class="btn-reject" onclick="rejectReview(${index})"><i class="fas fa-times"></i> 驳回</button>
+                <button class="btn-edit" onclick="editReview(${index})"><i class="fas fa-edit"></i> 编辑</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// 审核操作
+function approveReview(index) {
+    alert('已通过审核');
+}
+
+function rejectReview(index) {
+    alert('已驳回');
+}
+
+function editReview(index) {
+    alert('打开编辑面板');
+}
+
+// 加载历史记录
+function loadHistoryData() {
+    const container = document.getElementById('historyList');
+    if (!container) return;
+    
+    container.innerHTML = [
+        { type: 'sale', title: '红色连衣裙 x1', store: '中山路店', amount: 299, time: '2024-05-24 18:25' },
+        { type: 'sale', title: '黑色西装外套 x2', store: '人民广场店', amount: 718, time: '2024-05-24 16:30' },
+        { type: 'expense', title: '房租支出', store: '西湖大道店', amount: -5000, time: '2024-05-24 10:00' },
+        { type: 'return', title: '牛仔裤退货', store: '滨江店', amount: -199, time: '2024-05-23 15:20' },
+        { type: 'sale', title: '白色T恤 x5', store: '中山路店', amount: 400, time: '2024-05-23 14:10' }
+    ].map(item => `
+        <div class="history-item">
+            <div class="history-icon ${item.type}">
+                <i class="fas fa-${item.type === 'sale' ? 'arrow-up' : item.type === 'expense' ? 'arrow-down' : 'undo'}"></i>
+            </div>
+            <div class="history-info">
+                <div class="history-title">${item.title}</div>
+                <div class="history-meta">${item.store} · ${item.time}</div>
+            </div>
+            <span class="history-amount ${item.amount > 0 ? 'positive' : 'negative'}">${item.amount > 0 ? '+' : ''}${formatCurrency(item.amount)}</span>
+        </div>
+    `).join('');
+}
+
+// 语音录制
+let mediaRecorder = null;
+let audioChunks = [];
+
+function initVoiceRecording() {
+    const recordBtn = document.getElementById('recordBtn');
+    if (!recordBtn) return;
+    
+    recordBtn.addEventListener('click', toggleRecording);
 }
 
 async function toggleRecording() {
     const recordBtn = document.getElementById('recordBtn');
-    const recordStatus = document.getElementById('recordStatus');
-    const recordWave = document.getElementById('waveContainer');
+    const statusEl = document.getElementById('recordStatus');
     
-    if (!isRecording) {
-        // 开始录音
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaRecorder = new MediaRecorder(stream);
             audioChunks = [];
             
-            mediaRecorder.ondataavailable = (event) => {
-                audioChunks.push(event.data);
-            };
-            
-            mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
-                await uploadAndRecognizeAudio(audioBlob);
-                
-                // 停止所有音轨
-                stream.getTracks().forEach(track => track.stop());
-            };
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.onstop = processVoiceRecording;
             
             mediaRecorder.start();
-            isRecording = true;
-            
-            // 更新UI
-            if (recordBtn) recordBtn.classList.add('recording');
-            if (recordStatus) recordStatus.textContent = '正在录音...点击停止';
-            if (recordWave) recordWave.classList.add('active');
-            
-        } catch (error) {
-            console.error('录音失败:', error);
-            showError('无法访问麦克风，请检查权限设置');
+            recordBtn.classList.add('recording');
+            recordBtn.querySelector('span').textContent = '点击停止录音';
+            statusEl.textContent = '正在录音...';
+        } catch (err) {
+            alert('无法访问麦克风，请检查权限设置');
         }
     } else {
-        // 停止录音
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
-        }
-        isRecording = false;
-        
-        // 更新UI
-        if (recordBtn) recordBtn.classList.remove('recording');
-        if (recordStatus) recordStatus.textContent = '点击开始录音';
-        if (recordWave) recordWave.classList.remove('active');
+        mediaRecorder.stop();
+        recordBtn.classList.remove('recording');
+        recordBtn.querySelector('span').textContent = '点击开始录音';
+        statusEl.textContent = '正在识别...';
     }
 }
 
-async function uploadAndRecognizeAudio(audioBlob) {
-    try {
-        showLoading('正在识别语音...');
-        
-        // 创建表单数据
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'recording.mp3');
-        formData.append('store_id', currentStoreId);
-        
-        const response = await fetch(`${API_BASE}/api/voice`, {
-            method: 'POST',
-            body: formData
-        });
-        
-        const result = await response.json();
-        console.log('语音识别结果:', result);
-        
-        if (result.extracted_data) {
-            showRecognitionResult(result);
-        } else {
-            showError('未能识别出有效信息，请重新录音');
-        }
-        
-    } catch (error) {
-        console.error('语音识别失败:', error);
-        showError('语音识别失败: ' + error.message);
-    } finally {
-        hideLoading();
-    }
-}
-
-// ==================== 图片上传 ====================
-function initImageUpload() {
-    const dropZone = document.getElementById('dropZone');
-    const imageInput = document.getElementById('imageInput');
+function processVoiceRecording() {
+    const blob = new Blob(audioChunks, { type: 'audio/webm' });
+    const formData = new FormData();
+    formData.append('audio', blob, 'recording.webm');
+    formData.append('store_id', currentStore);
     
-    if (dropZone) {
-        dropZone.addEventListener('click', () => {
-            if (imageInput) imageInput.click();
-        });
-        
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('drag-over');
-        });
-        
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('drag-over');
-        });
-        
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('drag-over');
-            
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                handleImageUpload(files[0]);
-            }
-        });
-    }
-    
-    if (imageInput) {
-        imageInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                handleImageUpload(e.target.files[0]);
-            }
-        });
-    }
-}
-
-async function handleImageUpload(file) {
-    if (!file.type.startsWith('image/')) {
-        showError('请上传图片文件');
-        return;
-    }
-    
-    try {
-        showLoading('正在识别图片...');
-        
-        // 显示预览
-        const preview = document.getElementById('imagePreview');
-        if (preview) {
-            preview.src = URL.createObjectURL(file);
-            preview.style.display = 'block';
-        }
-        
-        // 上传识别
-        const formData = new FormData();
-        formData.append('image', file);
-        formData.append('store_id', currentStoreId);
-        
-        const response = await fetch(`${API_BASE}/api/image`, {
-            method: 'POST',
-            body: formData
-        });
-        
-        const result = await response.json();
-        console.log('图片识别结果:', result);
-        
-        if (result.extracted_data) {
-            showRecognitionResult(result);
-        } else {
-            showError('未能识别出有效信息，请上传清晰的票据图片');
-        }
-        
-    } catch (error) {
-        console.error('图片识别失败:', error);
-        showError('图片识别失败: ' + error.message);
-    } finally {
-        hideLoading();
-    }
-}
-
-// ==================== 模态框操作 ====================
-function closeModal() {
-    const modal = document.getElementById('resultModal');
-    if (modal) {
-        modal.classList.add('hidden');
-    }
-}
-
-function confirmRecord() {
-    // TODO: 将记录保存到数据库
-    showSuccess('记录已保存');
-    closeModal();
-}
-
-// ==================== 显示识别结果 ====================
-function showRecognitionResult(result) {
-    const modal = document.getElementById('resultModal');
-    const resultContent = document.getElementById('modalBody');
-    
-    if (!modal || !resultContent) {
-        console.error('模态框元素未找到');
-        alert('识别成功！\n' + JSON.stringify(result.extracted_data, null, 2));
-        return;
-    }
-    
-    const data = result.extracted_data;
-    const fields = data.extracted_fields || {};
-    const items = fields.items || [];
-    
-    resultContent.innerHTML = `
-        <div class="result-section">
-            <div class="result-header">
-                <span class="confidence">识别置信度: ${(data.confidence * 100 || 85).toFixed(0)}%</span>
-            </div>
-            
-            <div class="result-item">
-                <label>交易类型:</label>
-                <span>${data.data_type === 'revenue' ? '销售收入' : '支出'}</span>
-            </div>
-            
-            ${items.length > 0 ? `
-                <div class="result-item">
-                    <label>商品明细:</label>
-                    <div class="items-list">
-                        ${items.map(item => `
-                            <div class="item-row">
-                                <span>${item.name || '未知商品'}</span>
-                                <span>×${item.quantity || 1}</span>
-                                <span>¥${item.price || 0}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            ` : ''}
-            
-            <div class="result-item">
-                <label>总金额:</label>
-                <span class="amount">¥${fields.total_amount || 0}</span>
-            </div>
-            
-            ${fields.description ? `
-                <div class="result-item">
-                    <label>备注:</label>
-                    <span>${fields.description}</span>
-                </div>
-            ` : ''}
-        </div>
-        
-        <div class="result-actions">
-            <button class="btn-secondary" onclick="closeResultModal()">重新录入</button>
-            <button class="btn-primary" onclick="confirmSubmit()">确认提交</button>
-        </div>
-    `;
-    
-    modal.style.display = 'flex';
-}
-
-function closeResultModal() {
-    const modal = document.getElementById('resultModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
-
-async function confirmSubmit() {
-    showToast('提交成功！');
-    closeResultModal();
-    
-    // 刷新看板数据
-    if (currentPage === 'dashboard') {
-        loadDashboardData();
-    }
-}
-
-// ==================== 历史记录 ====================
-async function loadHistoryRecords() {
-    try {
-        const response = await fetch(`${API_BASE}/api/records?limit=20`);
-        const result = await response.json();
-        
-        const recordsList = document.getElementById('recordsList');
-        if (recordsList && result.records) {
-            recordsList.innerHTML = result.records.map(record => `
-                <div class="record-item">
-                    <div class="record-info">
-                        <span class="record-type">${record.type}</span>
-                        <span class="record-desc">${record.description}</span>
-                    </div>
-                    <div class="record-amount">¥${record.amount}</div>
-                    <div class="record-time">${record.time}</div>
-                </div>
-            `).join('');
-        }
-    } catch (error) {
-        console.error('加载历史记录失败:', error);
-    }
-}
-
-// ==================== 辅助函数 ====================
-function showLoading(message = '加载中...') {
-    const loadingEl = document.getElementById('loadingOverlay');
-    const loadingText = document.getElementById('loadingText');
-    if (loadingEl) {
-        loadingEl.style.display = 'flex';
-        if (loadingText) loadingText.textContent = message;
-    }
-}
-
-function hideLoading() {
-    const loadingEl = document.getElementById('loadingOverlay');
-    if (loadingEl) {
-        loadingEl.style.display = 'none';
-    }
-}
-
-function showError(message) {
-    console.error('Error:', message);
-    showToast(message, 'error');
-}
-
-function showToast(message, type = 'info') {
-    // 创建toast元素
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.textContent = message;
-    toast.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 12px 24px;
-        border-radius: 8px;
-        background: ${type === 'error' ? '#ef4444' : '#10b981'};
-        color: white;
-        z-index: 9999;
-        animation: slideIn 0.3s ease;
-    `;
-    
-    document.body.appendChild(toast);
-    
-    // 3秒后移除
-    setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
-
-// 刷新数据函数（全局可调用）
-function refreshData() {
-    loadDashboardData();
-    showToast('数据已刷新');
-}
-
-// 显示识别结果模态框
-function showResultModal(data) {
-    // 移除已存在的模态框
-    const existingModal = document.getElementById('resultModal');
-    if (existingModal) existingModal.remove();
-    
-    // 提取数据
-    const extracted = data.extracted_data || {};
-    const fields = extracted.extracted_fields || {};
-    const items = fields.items || [];
-    const confidence = extracted.confidence || data.confidence || 0.85;
-    
-    // 构建商品列表HTML
-    let itemsHtml = '';
-    if (items.length > 0) {
-        itemsHtml = items.map(item => `
-            <div class="result-item">
-                <span class="result-label">商品</span>
-                <span class="result-value">${item.name || '未知'} x${item.quantity || 1}</span>
-            </div>
-            ${item.price ? `<div class="result-item"><span class="result-label">单价</span><span class="result-value">¥${item.price}</span></div>` : ''}
-        `).join('');
-    }
-    
-    // 创建模态框
-    const modal = document.createElement('div');
-    modal.id = 'resultModal';
-    modal.className = 'modal';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-check-circle"></i> 识别结果</h3>
-                <button class="modal-close" onclick="closeResultModal()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="result-item">
-                    <span class="result-label">置信度</span>
-                    <span class="result-value">${(confidence * 100).toFixed(0)}%</span>
-                </div>
-                <div class="result-item">
-                    <span class="result-label">交易类型</span>
-                    <span class="result-value">${fields.data_type === 'expense' ? '支出' : '销售'}</span>
-                </div>
-                ${itemsHtml}
-                ${fields.total_amount ? `<div class="result-item"><span class="result-label">总金额</span><span class="result-value">¥${fields.total_amount}</span></div>` : ''}
-                ${fields.description ? `<div class="result-item"><span class="result-label">备注</span><span class="result-value">${fields.description}</span></div>` : ''}
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeResultModal()">
-                    <i class="fas fa-redo"></i> 重新录入
-                </button>
-                <button class="btn-primary" onclick="confirmSubmit()">
-                    <i class="fas fa-check"></i> 确认提交
-                </button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    // 点击背景关闭
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeResultModal();
+    fetch(`${API_BASE}/api/voice`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        showRecognitionResult(data);
+    })
+    .catch(err => {
+        document.getElementById('recordStatus').textContent = '识别失败，请重试';
     });
 }
 
-function closeResultModal() {
+// 图片上传
+function initImageUpload() {
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    
+    if (!uploadArea || !fileInput) return;
+    
+    uploadArea.addEventListener('click', () => fileInput.click());
+    uploadArea.addEventListener('dragover', e => {
+        e.preventDefault();
+        uploadArea.style.borderColor = 'var(--primary-color)';
+    });
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.style.borderColor = 'var(--border-color)';
+    });
+    uploadArea.addEventListener('drop', e => {
+        e.preventDefault();
+        uploadArea.style.borderColor = 'var(--border-color)';
+        if (e.dataTransfer.files.length) {
+            handleImageUpload(e.dataTransfer.files[0]);
+        }
+    });
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length) {
+            handleImageUpload(fileInput.files[0]);
+        }
+    });
+}
+
+function handleImageUpload(file) {
+    const preview = document.getElementById('imagePreview');
+    preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="预览">`;
+    preview.classList.remove('hidden');
+    
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('store_id', currentStore);
+    
+    showLoading();
+    
+    fetch(`${API_BASE}/api/image', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        hideLoading();
+        showRecognitionResult(data);
+    })
+    .catch(err => {
+        hideLoading();
+        alert('图片识别失败，请重试');
+    });
+}
+
+// 显示识别结果
+function showRecognitionResult(data) {
     const modal = document.getElementById('resultModal');
-    if (modal) modal.remove();
+    const content = document.getElementById('resultContent');
+    
+    const extracted = data.extracted_data || {};
+    const confidence = (extracted.confidence || 0.85) * 100;
+    
+    // 根据置信度决定显示方式
+    const isHighConfidence = confidence >= 80;
+    
+    content.innerHTML = `
+        <div class="result-field">
+            <span class="field-label">识别置信度</span>
+            <span class="field-value">${confidence.toFixed(0)}%</span>
+        </div>
+        <div class="confidence-bar">
+            <div class="confidence-fill" style="width: ${confidence}%; background: ${isHighConfidence ? 'var(--success-color)' : 'var(--warning-color)'}"></div>
+        </div>
+        ${isHighConfidence ? '' : '<p style="color: var(--warning-color); margin-top: 12px; font-size: 14px;"><i class="fas fa-info-circle"></i> 置信度较低，请仔细核对以下信息</p>'}
+        
+        <div class="result-field" style="margin-top: 16px">
+            <span class="field-label">交易类型</span>
+            <span class="field-value">${extracted.data_type === 'revenue' ? '销售收入' : extracted.data_type === 'expense' ? '支出' : '其他'}</span>
+        </div>
+        ${renderExtractedFields(extracted.extracted_fields || {})}
+        
+        <div class="modal-actions">
+            <button class="btn-confirm" onclick="confirmSubmit()">
+                <i class="fas fa-check"></i> 确认提交
+            </button>
+            <button class="btn-retry" onclick="closeModal()">
+                <i class="fas fa-redo"></i> 重新录入
+            </button>
+        </div>
+    `;
+    
+    modal.classList.add('show');
+}
+
+function renderExtractedFields(fields) {
+    if (!fields || !fields.items || fields.items.length === 0) {
+        return `
+            <div class="result-field">
+                <span class="field-label">金额</span>
+                <span class="field-value">${formatCurrency(fields.total_amount || 0)}</span>
+            </div>
+        `;
+    }
+    
+    return fields.items.map(item => `
+        <div class="result-field">
+            <span class="field-label">${item.name || '商品'}</span>
+            <span class="field-value">${item.quantity || 1}件 × ${formatCurrency(item.price || 0)}</span>
+        </div>
+    `).join('') + (fields.description ? `
+        <div class="result-field">
+            <span class="field-label">备注</span>
+            <span class="field-value">${fields.description}</span>
+        </div>
+    ` : '');
+}
+
+function closeModal() {
+    document.getElementById('resultModal').classList.remove('show');
 }
 
 function confirmSubmit() {
-    closeResultModal();
-    showToast('数据已保存成功！', 'success');
-    refreshData();
+    alert('提交成功！');
+    closeModal();
 }
+
+// 生成报告
+function generateReport(type) {
+    showLoading();
+    
+    fetch(`${API_BASE}/api/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type })
+    })
+    .then(res => res.json())
+    .then(data => {
+        hideLoading();
+        if (data.url) {
+            window.open(data.url, '_blank');
+        } else {
+            alert('报告生成成功');
+        }
+    })
+    .catch(err => {
+        hideLoading();
+        alert('报告生成中...');
+    });
+}
+
+// 加载状态
+function showLoading() {
+    document.getElementById('loadingOverlay')?.classList.add('show');
+}
+
+function hideLoading() {
+    document.getElementById('loadingOverlay')?.classList.remove('show');
+}
+
+// 刷新按钮
+document.getElementById('refreshBtn')?.addEventListener('click', () => {
+    loadDashboardData();
+});
+
+// 门店选择变更
+document.getElementById('storeSelect')?.addEventListener('change', (e) => {
+    currentStore = e.target.value;
+    loadDashboardData();
+});

@@ -379,6 +379,8 @@ class AggregationInput(BaseModel):
     store_id: Optional[str] = Field(default=None, description="门店ID（可选，不传则聚合所有门店）")
     validated_data: Dict[str, Any] = Field(default_factory=dict, description="校验后的数据")
     records: List[Dict[str, Any]] = Field(default_factory=list, description="历史账目记录")
+    fixed_expenses: Dict[str, Any] = Field(default_factory=dict, description="固定费用配置")
+    last_period_data: Dict[str, Any] = Field(default_factory=dict, description="上一周期数据")
 
 
 class AggregationOutput(BaseModel):

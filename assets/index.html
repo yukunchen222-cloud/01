@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>服装连锁AI记账助手</title>
+    <title>服装连锁AI记账助手 - 老板端</title>
     <link rel="stylesheet" href="/static/styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -23,6 +23,18 @@
                     <i class="fas fa-chart-pie"></i>
                     <span>数据看板</span>
                 </li>
+                <li class="nav-item" data-page="analysis">
+                    <i class="fas fa-tshirt"></i>
+                    <span>款式分析</span>
+                </li>
+                <li class="nav-item" data-page="alerts">
+                    <i class="fas fa-bell"></i>
+                    <span>异常预警</span>
+                </li>
+                <li class="nav-item" data-page="review">
+                    <i class="fas fa-check-circle"></i>
+                    <span>审核中心</span>
+                </li>
                 <li class="nav-item" data-page="voice">
                     <i class="fas fa-microphone"></i>
                     <span>语音报账</span>
@@ -31,7 +43,7 @@
                     <i class="fas fa-camera"></i>
                     <span>拍照录入</span>
                 </li>
-                <li class="nav-item" data-page="records">
+                <li class="nav-item" data-page="history">
                     <i class="fas fa-history"></i>
                     <span>历史记录</span>
                 </li>
@@ -45,8 +57,8 @@
                     <i class="fas fa-user"></i>
                 </div>
                 <div class="user-details">
-                    <span class="user-name">店长</span>
-                    <span class="user-role">中山路店</span>
+                    <span class="user-name">老板</span>
+                    <span class="user-role">连锁店总管</span>
                 </div>
             </div>
         </nav>
@@ -63,9 +75,6 @@
                     <div class="store-selector">
                         <select id="storeSelect">
                             <option value="all">全部门店</option>
-                            <option value="store_001">中山路店</option>
-                            <option value="store_002">人民广场店</option>
-                            <option value="store_003">万达广场店</option>
                         </select>
                     </div>
                     <div class="date-filter">
@@ -73,7 +82,7 @@
                         <button class="date-btn" data-period="month">本月</button>
                         <button class="date-btn" data-period="year">本年</button>
                     </div>
-                    <button class="refresh-btn" onclick="refreshData()">
+                    <button class="refresh-btn" id="refreshBtn">
                         <i class="fas fa-sync-alt"></i>
                         刷新
                     </button>
@@ -84,106 +93,80 @@
             <div class="page-content">
                 <!-- 数据看板页面 -->
                 <div id="dashboardPage" class="page active">
-                    <!-- 时间筛选器 -->
-                    <div class="period-filter">
-                        <button class="date-btn active" data-period="day">今日</button>
-                        <button class="date-btn" data-period="month">本月</button>
-                        <button class="date-btn" data-period="year">本年</button>
-                    </div>
-                    
                     <!-- 预警提示 -->
-                    <div id="alertContainer" class="alert-container"></div>
+                    <div id="alertContainer" class="alert-container">
+                        <div id="alertList"></div>
+                    </div>
                     
                     <!-- 核心指标卡片 -->
                     <div class="stats-grid">
                         <div class="stat-card revenue">
-                            <div class="stat-icon">
-                                <i class="fas fa-dollar-sign"></i>
-                            </div>
+                            <div class="stat-icon"><i class="fas fa-dollar-sign"></i></div>
                             <div class="stat-info">
                                 <span class="stat-label">总营收</span>
                                 <span class="stat-value" id="totalRevenue">¥0</span>
-                                <span class="stat-change positive">
-                                    <i class="fas fa-arrow-up"></i> 12.5%
-                                </span>
+                                <span class="stat-change positive" id="totalRevenueChange">+12.5%</span>
                             </div>
                         </div>
                         <div class="stat-card cost">
-                            <div class="stat-icon">
-                                <i class="fas fa-shopping-bag"></i>
-                            </div>
+                            <div class="stat-icon"><i class="fas fa-shopping-bag"></i></div>
                             <div class="stat-info">
                                 <span class="stat-label">总成本</span>
                                 <span class="stat-value" id="totalCost">¥0</span>
-                                <span class="stat-change negative">
-                                    <i class="fas fa-arrow-down"></i> 3.2%
-                                </span>
                             </div>
                         </div>
                         <div class="stat-card profit">
-                            <div class="stat-icon">
-                                <i class="fas fa-chart-line"></i>
-                            </div>
+                            <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
                             <div class="stat-info">
                                 <span class="stat-label">毛利润</span>
                                 <span class="stat-value" id="grossProfit">¥0</span>
-                                <span class="stat-change positive">
-                                    <i class="fas fa-arrow-up"></i> 8.7%
-                                </span>
+                                <span class="stat-change positive" id="grossProfitChange">+8.7%</span>
+                            </div>
+                        </div>
+                        <div class="stat-card net-profit">
+                            <div class="stat-icon"><i class="fas fa-wallet"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-label">净利润</span>
+                                <span class="stat-value" id="netProfit">¥0</span>
+                                <span class="stat-change" id="netProfitChange">-</span>
                             </div>
                         </div>
                         <div class="stat-card margin">
-                            <div class="stat-icon">
-                                <i class="fas fa-percentage"></i>
-                            </div>
+                            <div class="stat-icon"><i class="fas fa-percentage"></i></div>
                             <div class="stat-info">
                                 <span class="stat-label">毛利率</span>
                                 <span class="stat-value" id="grossMargin">0%</span>
-                                <span class="stat-change positive">
-                                    <i class="fas fa-arrow-up"></i> 2.1%
-                                </span>
                             </div>
                         </div>
                         <div class="stat-card transactions">
-                            <div class="stat-icon">
-                                <i class="fas fa-receipt"></i>
-                            </div>
+                            <div class="stat-icon"><i class="fas fa-receipt"></i></div>
                             <div class="stat-info">
                                 <span class="stat-label">交易笔数</span>
                                 <span class="stat-value" id="transactionCount">0</span>
-                                <span class="stat-change positive">
-                                    <i class="fas fa-arrow-up"></i> 15.3%
-                                </span>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- 固定费用明细 -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <h3><i class="fas fa-file-invoice-dollar"></i> 固定费用明细</h3>
+                        </div>
+                        <div id="fixedExpenses" class="expense-grid"></div>
                     </div>
 
                     <!-- 图表区域 -->
                     <div class="charts-section">
                         <div class="chart-card">
-                            <div class="chart-header">
-                                <h3>营收趋势</h3>
-                                <div class="chart-legend">
-                                    <span class="legend-item"><i class="fas fa-circle" style="color: #6366f1"></i> 营收</span>
-                                    <span class="legend-item"><i class="fas fa-circle" style="color: #22c55e"></i> 利润</span>
-                                </div>
-                            </div>
-                            <div class="chart-body" id="revenueChart">
-                                <div class="chart-placeholder">
-                                    <i class="fas fa-chart-area"></i>
-                                    <p>图表加载中...</p>
-                                </div>
+                            <div class="chart-header"><h3>营收趋势</h3></div>
+                            <div class="chart-body">
+                                <canvas id="trendChart"></canvas>
                             </div>
                         </div>
                         <div class="chart-card">
-                            <div class="chart-header">
-                                <h3>品类销售占比</h3>
-                            </div>
-                            <div class="chart-body" id="categoryChart">
-                                <div class="chart-placeholder">
-                                    <i class="fas fa-chart-pie"></i>
-                                    <p>图表加载中...</p>
-                                </div>
+                            <div class="chart-header"><h3>品类销售占比</h3></div>
+                            <div class="chart-body">
+                                <canvas id="categoryChart"></canvas>
                             </div>
                         </div>
                     </div>
@@ -193,30 +176,82 @@
                         <div class="section-header">
                             <h3><i class="fas fa-store"></i> 门店业绩对比</h3>
                         </div>
-                        <div class="store-comparison">
-                            <div class="store-item">
-                                <div class="store-name">中山路店</div>
-                                <div class="store-bar">
-                                    <div class="bar-fill" style="width: 85%"></div>
-                                </div>
-                                <div class="store-value">¥125,800</div>
+                        <div id="storeComparison" class="store-comparison"></div>
+                    </div>
+                    
+                    <!-- 品类分布 -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <h3><i class="fas fa-tags"></i> 品类销售分布</h3>
+                        </div>
+                        <div id="categoryStats" class="category-stats"></div>
+                    </div>
+                </div>
+
+                <!-- 款式分析页面 -->
+                <div id="analysisPage" class="page">
+                    <div class="analysis-section">
+                        <div class="analysis-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-trophy"></i> 销量TOP10</h3>
                             </div>
-                            <div class="store-item">
-                                <div class="store-name">人民广场店</div>
-                                <div class="store-bar">
-                                    <div class="bar-fill" style="width: 72%"></div>
-                                </div>
-                                <div class="store-value">¥98,600</div>
+                            <div id="topSellers" class="ranking-list"></div>
+                        </div>
+                        <div class="analysis-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-exclamation-triangle"></i> 滞销预警</h3>
+                                <span class="warning-badge">30天未售超70%</span>
                             </div>
-                            <div class="store-item">
-                                <div class="store-name">万达广场店</div>
-                                <div class="store-bar">
-                                    <div class="bar-fill" style="width: 68%"></div>
+                            <div id="slowSellers" class="alert-list"></div>
+                        </div>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="analysis-card full-width">
+                            <div class="card-header">
+                                <h3><i class="fas fa-lightbulb"></i> AI补货建议</h3>
+                            </div>
+                            <div id="replenishSuggestions" class="suggestion-list">
+                                <div class="suggestion-item">
+                                    <span class="product-name">黑色西装外套</span>
+                                    <span class="suggestion-text">建议补货 <strong>15件</strong>，当前库存较低</span>
                                 </div>
-                                <div class="store-value">¥87,200</div>
+                                <div class="suggestion-item">
+                                    <span class="product-name">红色连衣裙</span>
+                                    <span class="suggestion-text">建议补货 <strong>8件</strong>，销售趋势上升</span>
+                                </div>
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- 异常预警页面 -->
+                <div id="alertsPage" class="page">
+                    <div class="alerts-filter">
+                        <button class="filter-btn active">全部</button>
+                        <button class="filter-btn">营收异常</button>
+                        <button class="filter-btn">库存异常</button>
+                        <button class="filter-btn">成本异常</button>
+                    </div>
+                    <div id="alertsList" class="alerts-container"></div>
+                </div>
+
+                <!-- 审核中心页面 -->
+                <div id="reviewPage" class="page">
+                    <div class="review-stats">
+                        <div class="review-stat-item">
+                            <span class="stat-number">5</span>
+                            <span class="stat-label">待审核</span>
+                        </div>
+                        <div class="review-stat-item">
+                            <span class="stat-number">128</span>
+                            <span class="stat-label">已通过</span>
+                        </div>
+                        <div class="review-stat-item">
+                            <span class="stat-number">12</span>
+                            <span class="stat-label">已驳回</span>
+                        </div>
+                    </div>
+                    <div id="reviewList" class="review-container"></div>
                 </div>
 
                 <!-- 语音报账页面 -->
@@ -224,9 +259,7 @@
                     <div class="feature-container">
                         <div class="feature-card voice-card">
                             <div class="feature-header">
-                                <div class="feature-icon voice-icon">
-                                    <i class="fas fa-microphone-alt"></i>
-                                </div>
+                                <div class="feature-icon voice-icon"><i class="fas fa-microphone-alt"></i></div>
                                 <h2>语音报账</h2>
                                 <p>点击下方按钮，说出您的交易信息</p>
                             </div>
@@ -235,48 +268,16 @@
                                     <i class="fas fa-microphone"></i>
                                     <span>点击开始录音</span>
                                 </button>
-                                <div class="voice-status" id="voiceStatus">
-                                    <div class="wave-container hidden" id="waveContainer">
-                                        <span class="wave"></span>
-                                        <span class="wave"></span>
-                                        <span class="wave"></span>
-                                        <span class="wave"></span>
-                                        <span class="wave"></span>
-                                    </div>
-                                    <p id="voiceStatusText">准备就绪</p>
-                                </div>
+                                <div class="voice-status" id="recordStatus">准备就绪</div>
                             </div>
                             <div class="voice-tips">
-                                <h4><i class="fas fa-lightbulb"></i> 示例话术</h4>
-                                <div class="tip-examples">
-                                    <div class="tip-item" onclick="fillVoiceExample('今天卖出一件红色连衣裙，售价299元，成本120元')">
-                                        "今天卖出一件红色连衣裙，售价299元，成本120元"
-                                    </div>
-                                    <div class="tip-item" onclick="fillVoiceExample('进货一批牛仔裤，共20件，总成本3600元')">
-                                        "进货一批牛仔裤，共20件，总成本3600元"
-                                    </div>
-                                    <div class="tip-item" onclick="fillVoiceExample('今日门店租金支出5000元')">
-                                        "今日门店租金支出5000元"
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- 识别结果 -->
-                            <div class="result-panel hidden" id="voiceResult">
-                                <div class="result-header">
-                                    <h4><i class="fas fa-check-circle"></i> 识别结果</h4>
-                                    <span class="confidence" id="voiceConfidence">置信度: 0%</span>
-                                </div>
-                                <div class="result-body" id="voiceResultBody">
-                                    <!-- 动态填充 -->
-                                </div>
-                                <div class="result-actions">
-                                    <button class="btn-secondary" onclick="retryVoice()">
-                                        <i class="fas fa-redo"></i> 重新录入
-                                    </button>
-                                    <button class="btn-primary" onclick="confirmVoiceRecord()">
-                                        <i class="fas fa-check"></i> 确认提交
-                                    </button>
-                                </div>
+                                <h4>示例话术</h4>
+                                <ul>
+                                    <li><i class="fas fa-check"></i> "今天卖出一件红色连衣裙，售价299元"</li>
+                                    <li><i class="fas fa-check"></i> "进货10件黑色西装外套，每件150元"</li>
+                                    <li><i class="fas fa-check"></i> "张姐退了那件红色M码大衣480元"</li>
+                                    <li><i class="fas fa-check"></i> "今天交房租5000元"</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
@@ -287,151 +288,94 @@
                     <div class="feature-container">
                         <div class="feature-card camera-card">
                             <div class="feature-header">
-                                <div class="feature-icon camera-icon">
-                                    <i class="fas fa-camera"></i>
-                                </div>
+                                <div class="feature-icon camera-icon"><i class="fas fa-camera"></i></div>
                                 <h2>拍照录入</h2>
-                                <p>拍摄单据照片，自动识别录入</p>
+                                <p>上传单据图片，AI自动识别交易信息</p>
                             </div>
                             <div class="upload-area" id="uploadArea">
-                                <input type="file" id="imageInput" accept="image/*" capture="environment" onchange="handleImageUpload(event)">
-                                <div class="upload-content">
-                                    <i class="fas fa-cloud-upload-alt"></i>
-                                    <p>点击上传或拖拽图片至此处</p>
-                                    <span>支持 JPG、PNG 格式</span>
-                                </div>
+                                <input type="file" id="fileInput" accept="image/*" hidden>
+                                <div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+                                <p>点击或拖拽图片到此处</p>
+                                <span>支持 JPG、PNG 格式</span>
                             </div>
-                            <div class="image-preview hidden" id="imagePreview">
-                                <img id="previewImg" src="" alt="预览">
-                                <button class="remove-btn" onclick="removeImage()">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
+                            <div id="imagePreview" class="image-preview"></div>
                             <div class="camera-tips">
-                                <h4><i class="fas fa-lightbulb"></i> 拍摄建议</h4>
+                                <h4>拍摄建议</h4>
                                 <ul>
-                                    <li><i class="fas fa-check"></i> 确保光线充足，避免阴影</li>
-                                    <li><i class="fas fa-check"></i> 保持单据平整，避免褶皱</li>
-                                    <li><i class="fas fa-check"></i> 文字清晰可见，对焦准确</li>
+                                    <li><i class="fas fa-check"></i> 确保图片清晰，光线充足</li>
+                                    <li><i class="fas fa-check"></i> 单据文字完整可见</li>
+                                    <li><i class="fas fa-check"></i> 避免反光和阴影</li>
                                 </ul>
-                            </div>
-                            <!-- 识别结果 -->
-                            <div class="result-panel hidden" id="ocrResult">
-                                <div class="result-header">
-                                    <h4><i class="fas fa-check-circle"></i> 识别结果</h4>
-                                    <span class="confidence" id="ocrConfidence">置信度: 0%</span>
-                                </div>
-                                <div class="result-body" id="ocrResultBody">
-                                    <!-- 动态填充 -->
-                                </div>
-                                <div class="result-actions">
-                                    <button class="btn-secondary" onclick="retryOcr()">
-                                        <i class="fas fa-redo"></i> 重新拍摄
-                                    </button>
-                                    <button class="btn-primary" onclick="confirmOcrRecord()">
-                                        <i class="fas fa-check"></i> 确认提交
-                                    </button>
-                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- 历史记录页面 -->
-                <div id="recordsPage" class="page">
-                    <div class="section-card">
-                        <div class="section-header">
-                            <h3><i class="fas fa-history"></i> 交易记录</h3>
-                            <div class="filter-group">
-                                <select class="filter-select" id="typeFilter">
-                                    <option value="all">全部类型</option>
-                                    <option value="sale">销售</option>
-                                    <option value="purchase">进货</option>
-                                    <option value="expense">支出</option>
-                                </select>
-                                <input type="date" class="filter-date" id="dateFilter">
-                            </div>
-                        </div>
-                        <div class="records-table">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>时间</th>
-                                        <th>类型</th>
-                                        <th>商品/项目</th>
-                                        <th>门店</th>
-                                        <th>金额</th>
-                                        <th>操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="recordsTableBody">
-                                    <!-- 动态填充 -->
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="pagination">
-                            <button class="page-btn" disabled><i class="fas fa-chevron-left"></i></button>
-                            <span class="page-info">第 1 页 / 共 1 页</span>
-                            <button class="page-btn" disabled><i class="fas fa-chevron-right"></i></button>
-                        </div>
+                <div id="historyPage" class="page">
+                    <div class="history-filter">
+                        <select id="typeFilter">
+                            <option value="all">全部类型</option>
+                            <option value="sale">销售收入</option>
+                            <option value="expense">支出</option>
+                            <option value="return">退货</option>
+                        </select>
+                        <input type="date" id="dateFilter">
+                    </div>
+                    <div id="historyList" class="history-list"></div>
+                    <div class="pagination">
+                        <button class="page-btn">上一页</button>
+                        <span class="page-info">第 1 页</span>
+                        <button class="page-btn">下一页</button>
                     </div>
                 </div>
 
                 <!-- 报告中心页面 -->
                 <div id="reportsPage" class="page">
-                    <div class="reports-grid">
-                        <div class="report-card">
-                            <div class="report-icon">
-                                <i class="fas fa-calendar-day"></i>
-                            </div>
+                    <div class="report-cards">
+                        <div class="report-card" onclick="generateReport('daily')">
+                            <div class="report-icon"><i class="fas fa-calendar-day"></i></div>
                             <h3>日报</h3>
-                            <p>每日经营数据汇总</p>
-                            <button class="report-btn" onclick="generateReport('day')">
-                                <i class="fas fa-download"></i> 生成报告
+                            <p>今日经营数据汇总</p>
+                            <button class="btn-report">
+                                <i class="fas fa-file-excel"></i> 生成Excel
                             </button>
                         </div>
-                        <div class="report-card">
-                            <div class="report-icon">
-                                <i class="fas fa-calendar-week"></i>
-                            </div>
+                        <div class="report-card" onclick="generateReport('weekly')">
+                            <div class="report-icon"><i class="fas fa-calendar-week"></i></div>
                             <h3>周报</h3>
-                            <p>每周经营数据分析</p>
-                            <button class="report-btn" onclick="generateReport('week')">
-                                <i class="fas fa-download"></i> 生成报告
+                            <p>本周经营数据汇总</p>
+                            <button class="btn-report">
+                                <i class="fas fa-file-excel"></i> 生成Excel
                             </button>
                         </div>
-                        <div class="report-card">
-                            <div class="report-icon">
-                                <i class="fas fa-calendar-alt"></i>
-                            </div>
+                        <div class="report-card" onclick="generateReport('monthly')">
+                            <div class="report-icon"><i class="fas fa-calendar-alt"></i></div>
                             <h3>月报</h3>
-                            <p>月度经营状况分析</p>
-                            <button class="report-btn" onclick="generateReport('month')">
-                                <i class="fas fa-download"></i> 生成报告
+                            <p>本月经营数据汇总</p>
+                            <button class="btn-report">
+                                <i class="fas fa-file-pdf"></i> 生成PDF
                             </button>
                         </div>
-                        <div class="report-card">
-                            <div class="report-icon">
-                                <i class="fas fa-chart-bar"></i>
-                            </div>
+                        <div class="report-card" onclick="generateReport('yearly')">
+                            <div class="report-icon"><i class="fas fa-calendar"></i></div>
                             <h3>年报</h3>
-                            <p>年度经营总结报告</p>
-                            <button class="report-btn" onclick="generateReport('year')">
-                                <i class="fas fa-download"></i> 生成报告
+                            <p>本年度经营数据汇总</p>
+                            <button class="btn-report">
+                                <i class="fas fa-file-pdf"></i> 生成PDF
                             </button>
                         </div>
                     </div>
-
-                    <!-- 历史报告列表 -->
-                    <div class="section-card">
+                    
+                    <!-- AI月度洞察 -->
+                    <div class="section-card insight-card">
                         <div class="section-header">
-                            <h3><i class="fas fa-file-alt"></i> 历史报告</h3>
+                            <h3><i class="fas fa-robot"></i> AI月度洞察</h3>
                         </div>
-                        <div class="reports-list" id="reportsList">
-                            <div class="empty-state">
-                                <i class="fas fa-folder-open"></i>
-                                <p>暂无历史报告</p>
-                            </div>
+                        <div id="aiInsight" class="ai-insight">
+                            <p>本月营收125,800元，环比上月增长12.5%，主要增长来自连衣裙品类（+28%）。建议加大连衣裙类目备货量。</p>
+                            <p>净利润68,200元，净利率54.2%，高于行业平均水平。本月固定费用控制良好，建议继续保持。</p>
+                            <p>异常预警：人民广场店连续3天营收下滑，建议关注。</p>
                         </div>
                     </div>
                 </div>
@@ -439,46 +383,20 @@
         </main>
     </div>
 
-    <!-- 加载提示 -->
-    <div class="loading-overlay hidden" id="loadingOverlay">
-        <div class="loading-spinner">
-            <div class="spinner"></div>
-            <p>处理中...</p>
-        </div>
+    <!-- 加载遮罩 -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p>加载中...</p>
     </div>
 
-    <!-- 成功提示 -->
-    <div class="toast success hidden" id="successToast">
-        <i class="fas fa-check-circle"></i>
-        <span id="successMessage">操作成功</span>
-    </div>
-
-    <!-- 错误提示 -->
-    <div class="toast error hidden" id="errorToast">
-        <i class="fas fa-exclamation-circle"></i>
-        <span id="errorMessage">操作失败</span>
-    </div>
-
-    <!-- 结果模态框 -->
-    <div class="modal hidden" id="resultModal">
+    <!-- 识别结果弹窗 -->
+    <div id="resultModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3><i class="fas fa-check-circle"></i> 识别结果</h3>
-                <button class="modal-close" onclick="closeModal()">
-                    <i class="fas fa-times"></i>
-                </button>
+                <h3>识别结果</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
-            <div class="modal-body" id="modalBody">
-                <!-- 动态填充 -->
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeModal()">
-                    <i class="fas fa-redo"></i> 重新录入
-                </button>
-                <button class="btn-primary" onclick="confirmRecord()">
-                    <i class="fas fa-check"></i> 确认提交
-                </button>
-            </div>
+            <div id="resultContent" class="modal-body"></div>
         </div>
     </div>
 
