@@ -436,42 +436,385 @@ async def api_document(request: Request):
 
 @app.get("/api/records")
 async def get_records(
+    request: Request,
     store_id: str = None,
     record_type: str = None,
+    start_date: str = None,
+    end_date: str = None,
     page: int = 1,
     page_size: int = 20
 ):
-    """获取历史记录"""
-    # 示例数据
-    records = [
-        {
-            "id": "r001",
-            "store_id": "store_001",
-            "store_name": "中山路店",
-            "type": "sale",
-            "amount": 2580.00,
-            "category": "连衣裙",
-            "description": "红色连衣裙x2",
-            "created_at": "2024-05-24 14:30:00"
-        },
-        {
-            "id": "r002",
-            "store_id": "store_001",
-            "store_name": "中山路店",
-            "type": "expense",
-            "amount": 450.00,
-            "category": "水电费",
-            "description": "5月电费",
-            "created_at": "2024-05-24 10:00:00"
+    """获取历史记录（真实数据）"""
+    from utils.auth import _load_json_file, RECORDS_FILE, decode_token
+    
+    try:
+        record_data = _load_json_file(RECORDS_FILE)
+        records = record_data.get("records", [])
+        
+        # 权限过滤
+        auth_header = request.headers.get("Authorization", "")
+        org_id = "org_default"
+        user_role = "owner"
+        user_store_ids = None
+        
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            payload = decode_token(token)
+            if payload:
+                org_id = payload.get("org_id", org_id)
+                user_role = payload.get("role", user_role)
+                user_store_ids = payload.get("store_ids")
+        
+        # 按组织过滤
+        records = [r for r in records if r.get("org_id") == org_id]
+        
+        # 店长只能看自己门店
+        if user_role == "manager" and user_store_ids:
+            records = [r for r in records if r.get("store_id") in user_store_ids]
+        
+        # 门店筛选
+        if store_id and store_id != "all":
+            records = [r for r in records if r.get("store_id") == store_id]
+        
+        # 类型筛选
+        if record_type and record_type != "all":
+            type_map = {"sale": "revenue", "expense": "expense", "return": "return", "purchase": "purchase"}
+            actual_type = type_map.get(record_type, record_type)
+            records = [r for r in records if r.get("type") == actual_type]
+        
+        # 日期筛选
+        if start_date:
+            records = [r for r in records if r.get("created_at", "") >= start_date]
+        if end_date:
+            records = [r for r in records if r.get("created_at", "") <= end_date + " 23:59:59"]
+        
+        # 按时间倒序
+        records.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        
+        # 分页
+        total = len(records)
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        page_records = records[start_idx:end_idx]
+        
+        return {
+            "success": True,
+            "records": page_records,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size
         }
-    ]
-    return {
-        "success": True,
-        "records": records,
-        "total": len(records),
-        "page": page,
-        "page_size": page_size
-    }
+    except Exception as e:
+        logger.error(f"获取历史记录失败: {e}")
+        return {"success": False, "records": [], "total": 0, "error": str(e)}
+
+@app.post("/api/records")
+async def create_record(request: Request):
+    """创建交易记录（确认提交）"""
+    from utils.auth import _load_json_file, _save_json_file, RECORDS_FILE
+    
+    try:
+        data = await request.json()
+        record_data = _load_json_file(RECORDS_FILE)
+        records = record_data.get("records", [])
+        next_id = record_data.get("next_id", 1)
+        
+        # 构建新记录
+        new_record = {
+            "id": f"rec_{next_id:03d}",
+            "org_id": data.get("org_id", "org_default"),
+            "store_id": data.get("store_id", ""),
+            "store_name": data.get("store_name", ""),
+            "type": data.get("type", "revenue"),
+            "category": data.get("category", ""),
+            "items": data.get("items", []),
+            "total_amount": float(data.get("total_amount", 0)),
+            "payment_method": data.get("payment_method", ""),
+            "confidence": float(data.get("confidence", 0.8)),
+            "status": data.get("status", "pending"),
+            "operator": data.get("operator", ""),
+            "created_at": data.get("created_at", time.strftime("%Y-%m-%d %H:%M:%S"))
+        }
+        
+        records.append(new_record)
+        record_data["records"] = records
+        record_data["next_id"] = next_id + 1
+        _save_json_file(RECORDS_FILE, record_data)
+        
+        return {"success": True, "record": new_record}
+    except Exception as e:
+        logger.error(f"创建记录失败: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.put("/api/records/{record_id}/approve")
+async def approve_record(record_id: str, request: Request):
+    """审核通过记录"""
+    from utils.auth import _load_json_file, _save_json_file, RECORDS_FILE
+    
+    try:
+        record_data = _load_json_file(RECORDS_FILE)
+        records = record_data.get("records", [])
+        
+        for r in records:
+            if r.get("id") == record_id:
+                r["status"] = "approved"
+                _save_json_file(RECORDS_FILE, record_data)
+                return {"success": True, "record": r}
+        
+        return {"success": False, "message": "记录不存在"}
+    except Exception as e:
+        logger.error(f"审核通过失败: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.put("/api/records/{record_id}/reject")
+async def reject_record(record_id: str, request: Request):
+    """审核驳回记录"""
+    from utils.auth import _load_json_file, _save_json_file, RECORDS_FILE
+    
+    try:
+        record_data = _load_json_file(RECORDS_FILE)
+        records = record_data.get("records", [])
+        
+        for r in records:
+            if r.get("id") == record_id:
+                r["status"] = "rejected"
+                _save_json_file(RECORDS_FILE, record_data)
+                return {"success": True, "record": r}
+        
+        return {"success": False, "message": "记录不存在"}
+    except Exception as e:
+        logger.error(f"审核驳回失败: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.put("/api/records/{record_id}")
+async def update_record(record_id: str, request: Request):
+    """编辑记录"""
+    from utils.auth import _load_json_file, _save_json_file, RECORDS_FILE
+    
+    try:
+        data = await request.json()
+        record_data = _load_json_file(RECORDS_FILE)
+        records = record_data.get("records", [])
+        
+        for r in records:
+            if r.get("id") == record_id:
+                # 只更新允许修改的字段
+                for key in ["items", "total_amount", "category", "payment_method", "type"]:
+                    if key in data:
+                        r[key] = data[key]
+                r["status"] = "pending"  # 编辑后重新待审核
+                _save_json_file(RECORDS_FILE, record_data)
+                return {"success": True, "record": r}
+        
+        return {"success": False, "message": "记录不存在"}
+    except Exception as e:
+        logger.error(f"编辑记录失败: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.get("/api/dashboard")
+async def get_dashboard_data(
+    request: Request,
+    period: str = "month",
+    store_id: str = "all"
+):
+    """获取看板数据（真实统计）"""
+    from utils.auth import _load_json_file, RECORDS_FILE, decode_token
+    
+    try:
+        record_data = _load_json_file(RECORDS_FILE)
+        records = record_data.get("records", [])
+        
+        # 权限过滤
+        auth_header = request.headers.get("Authorization", "")
+        org_id = "org_default"
+        user_role = "owner"
+        user_store_ids = None
+        
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            payload = decode_token(token)
+            if payload:
+                org_id = payload.get("org_id", org_id)
+                user_role = payload.get("role", user_role)
+                user_store_ids = payload.get("store_ids")
+        
+        # 过滤组织
+        records = [r for r in records if r.get("org_id") == org_id]
+        
+        # 店长只看自己的门店
+        if user_role == "manager" and user_store_ids:
+            records = [r for r in records if r.get("store_id") in user_store_ids]
+        
+        # 门店筛选
+        if store_id and store_id != "all":
+            records = [r for r in records if r.get("store_id") == store_id]
+        
+        # 日期过滤
+        import datetime
+        now = datetime.datetime.now()
+        if period == "day":
+            date_prefix = now.strftime("%Y-%m-%d")
+            records = [r for r in records if r.get("created_at", "").startswith(date_prefix)]
+        elif period == "month":
+            date_prefix = now.strftime("%Y-%m")
+            records = [r for r in records if r.get("created_at", "").startswith(date_prefix)]
+        elif period == "year":
+            date_prefix = now.strftime("%Y")
+            records = [r for r in records if r.get("created_at", "").startswith(date_prefix)]
+        
+        # 统计汇总
+        total_revenue = sum(r.get("total_amount", 0) for r in records if r.get("type") == "revenue" and r.get("status") == "approved")
+        total_cost = sum(r.get("total_amount", 0) for r in records if r.get("type") == "purchase" and r.get("status") == "approved")
+        total_expense = sum(r.get("total_amount", 0) for r in records if r.get("type") == "expense" and r.get("status") == "approved")
+        total_returns = sum(r.get("total_amount", 0) for r in records if r.get("type") == "return" and r.get("status") == "approved")
+        gross_profit = total_revenue - total_cost - total_returns
+        gross_margin = (gross_profit / total_revenue * 100) if total_revenue > 0 else 0
+        net_profit = gross_profit - total_expense
+        net_margin = (net_profit / total_revenue * 100) if total_revenue > 0 else 0
+        transaction_count = len([r for r in records if r.get("type") in ("revenue", "purchase", "return") and r.get("status") == "approved"])
+        
+        # 门店统计
+        store_stats = {}
+        for r in records:
+            if r.get("status") != "approved":
+                continue
+            sid = r.get("store_id", "")
+            sname = r.get("store_name", sid)
+            if sid not in store_stats:
+                store_stats[sid] = {"store_name": sname, "revenue": 0, "cost": 0, "count": 0}
+            if r.get("type") == "revenue":
+                store_stats[sid]["revenue"] += r.get("total_amount", 0)
+                store_stats[sid]["count"] += 1
+            elif r.get("type") == "purchase":
+                store_stats[sid]["cost"] += r.get("total_amount", 0)
+        
+        # 品类统计
+        category_stats = {}
+        for r in records:
+            if r.get("status") != "approved" or r.get("type") not in ("revenue",):
+                continue
+            cat = r.get("category", "其他")
+            category_stats[cat] = category_stats.get(cat, 0) + r.get("total_amount", 0)
+        
+        # 固定费用
+        fixed_expenses = {"rent": 0, "utilities": 0, "salary": 0, "other": 0}
+        for r in records:
+            if r.get("status") != "approved" or r.get("type") != "expense":
+                continue
+            cat = r.get("category", "")
+            if "房租" in cat or "rent" in cat.lower():
+                fixed_expenses["rent"] += r.get("total_amount", 0)
+            elif "水电" in cat or "utilities" in cat.lower():
+                fixed_expenses["utilities"] += r.get("total_amount", 0)
+            elif "人工" in cat or "工资" in cat or "salary" in cat.lower():
+                fixed_expenses["salary"] += r.get("total_amount", 0)
+            else:
+                fixed_expenses["other"] += r.get("total_amount", 0)
+        
+        # 商品销量统计
+        product_sales = {}
+        for r in records:
+            if r.get("status") != "approved" or r.get("type") not in ("revenue",):
+                continue
+            for item in r.get("items", []):
+                pname = item.get("name", "")
+                if not pname:
+                    continue
+                if pname not in product_sales:
+                    product_sales[pname] = {"name": pname, "category": r.get("category", ""), "quantity": 0, "revenue": 0}
+                product_sales[pname]["quantity"] += item.get("quantity", 0)
+                product_sales[pname]["revenue"] += item.get("amount", 0)
+        
+        top_sellers = sorted(product_sales.values(), key=lambda x: x["revenue"], reverse=True)[:10]
+        slow_sellers = sorted(product_sales.values(), key=lambda x: x["quantity"])[:5]
+        
+        # 异常检测
+        anomaly_alerts = []
+        if gross_margin < 30 and total_revenue > 0:
+            anomaly_alerts.append({"type": "low_margin", "level": "critical", "message": f"毛利率仅{gross_margin:.1f}%，低于30%警戒线", "value": gross_margin})
+        if total_revenue == 0:
+            anomaly_alerts.append({"type": "no_revenue", "level": "warning", "message": "当前期间暂无营收数据", "value": 0})
+        for sid, sdata in store_stats.items():
+            if sdata["revenue"] > 0 and sdata["cost"] / sdata["revenue"] > 0.65:
+                anomaly_alerts.append({"type": "high_cost", "level": "warning", "message": f"{sdata['store_name']}成本占营收{(sdata['cost']/sdata['revenue']*100):.0f}%，偏高", "value": sdata["cost"]/sdata["revenue"]})
+        if gross_margin < 0:
+            anomaly_alerts.append({"type": "negative_margin", "level": "critical", "message": f"毛利率为负({gross_margin:.1f}%)，存在严重亏损风险", "value": gross_margin})
+        
+        return {
+            "success": True,
+            "dashboard_data": {
+                "period": period,
+                "summary": {
+                    "total_revenue": total_revenue,
+                    "total_cost": total_cost,
+                    "total_expense": total_expense,
+                    "total_returns": total_returns,
+                    "gross_profit": gross_profit,
+                    "gross_margin": round(gross_margin, 1),
+                    "net_profit": net_profit,
+                    "net_margin": round(net_margin, 1),
+                    "transaction_count": transaction_count,
+                    "fixed_expenses": fixed_expenses
+                },
+                "store_stats": store_stats,
+                "category_stats": category_stats,
+                "product_analysis": {
+                    "top_sellers": top_sellers,
+                    "slow_sellers": slow_sellers,
+                    "product_count": len(product_sales)
+                }
+            },
+            "anomaly_alerts": anomaly_alerts
+        }
+    except Exception as e:
+        logger.error(f"获取看板数据失败: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/reviews")
+async def get_reviews(request: Request):
+    """获取待审核记录"""
+    from utils.auth import _load_json_file, RECORDS_FILE, decode_token
+    
+    try:
+        record_data = _load_json_file(RECORDS_FILE)
+        records = record_data.get("records", [])
+        
+        # 权限过滤
+        auth_header = request.headers.get("Authorization", "")
+        org_id = "org_default"
+        user_role = "owner"
+        
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            payload = decode_token(token)
+            if payload:
+                org_id = payload.get("org_id", org_id)
+                user_role = payload.get("role", user_role)
+        
+        # 只返回待审核记录
+        pending = [r for r in records if r.get("status") == "pending" and r.get("org_id") == org_id]
+        approved_count = len([r for r in records if r.get("status") == "approved" and r.get("org_id") == org_id])
+        rejected_count = len([r for r in records if r.get("status") == "rejected" and r.get("org_id") == org_id])
+        
+        # 会计不能审核
+        can_review = user_role in ("owner", "manager")
+        
+        pending.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        
+        return {
+            "success": True,
+            "pending": pending,
+            "stats": {
+                "pending_count": len(pending),
+                "approved_count": approved_count,
+                "rejected_count": rejected_count
+            },
+            "can_review": can_review
+        }
+    except Exception as e:
+        logger.error(f"获取审核记录失败: {e}")
+        return {"success": False, "pending": [], "error": str(e)}
 
 # ==================== 登录鉴权API ====================
 

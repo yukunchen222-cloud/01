@@ -708,14 +708,17 @@
             }
         }
         
+        let lastRecordData = null;
+        
         function showResult(data) {
-            document.getElementById('resultType').textContent = data.data_type === 'revenue' ? '销售' : 
-                data.data_type === 'return' ? '退货' : data.data_type === 'inventory' ? '盘点' : '支出';
+            lastRecordData = data;
+            const typeNames = {revenue:'销售', expense:'支出', return:'退货', purchase:'进货', inventory:'盘点'};
+            document.getElementById('resultType').textContent = typeNames[data.data_type] || data.data_type || '未知';
             
             const items = data.extracted_fields?.items || [];
             if (items.length > 0) {
-                document.getElementById('resultProduct').textContent = items[0].name || '-';
-                document.getElementById('resultQty').textContent = (items[0].quantity || 1) + '件';
+                document.getElementById('resultProduct').textContent = items.map(i => i.name).join(', ') || '-';
+                document.getElementById('resultQty').textContent = items.reduce((s, i) => s + (i.quantity || 1), 0) + '件';
             }
             
             document.getElementById('resultAmount').textContent = '¥' + (data.extracted_fields?.total_amount || 0);
@@ -725,10 +728,41 @@
         }
         
         async function confirmRecord() {
-            // 提交确认
-            alert('✅ 记账成功！\n\n今日营收已更新');
-            closeVoiceModal();
-            loadTodaySummary();
+            if (!lastRecordData) { alert('无数据可提交'); return; }
+            
+            const extracted = lastRecordData;
+            const fields = extracted.extracted_fields || {};
+            const storeId = user.store_ids?.[0] || 'store_001';
+            
+            try {
+                const resp = await fetch('/api/records', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({
+                        org_id: 'org_default',
+                        store_id: storeId,
+                        store_name: user.store_name || '我的门店',
+                        type: extracted.data_type || 'revenue',
+                        category: (fields.items && fields.items[0] && fields.items[0].category) || '',
+                        items: fields.items || [],
+                        total_amount: fields.total_amount || 0,
+                        payment_method: fields.payment_method || '',
+                        confidence: extracted.confidence || 0.8,
+                        status: (extracted.confidence || 0.8) >= 0.9 ? 'approved' : 'pending',
+                        operator: user.name || ''
+                    })
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    alert('✅ 记账成功！' + (result.record?.status === 'pending' ? '\n等待老板审核' : ''));
+                    closeVoiceModal();
+                    loadTodaySummary();
+                } else {
+                    alert('❌ 提交失败: ' + (result.message || ''));
+                }
+            } catch (error) {
+                alert('❌ 提交失败，请重试');
+            }
         }
         
         function openPhotoModal() {
@@ -796,21 +830,43 @@
             }
         }
         
-        function viewTodaySummary() {
-            alert('📊 今日小结\n\n营收: ¥12,580\n订单: 23笔\n毛利: ¥4,280\n环比昨日: +12.5%');
+        async function viewTodaySummary() {
+            const storeId = user.store_ids?.[0] || 'store_001';
+            try {
+                const resp = await fetch(`/api/dashboard?period=day&store_id=${storeId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    const s = data.dashboard_data?.summary || {};
+                    alert(`📊 今日小结\n\n营收: ¥${(s.total_revenue || 0).toLocaleString()}\n订单: ${s.transaction_count || 0}笔\n毛利: ¥${(s.gross_profit || 0).toLocaleString()}\n净利润: ¥${(s.net_profit || 0).toLocaleString()}\n毛利率: ${(s.gross_margin || 0).toFixed(1)}%`);
+                } else {
+                    alert('加载数据失败');
+                }
+            } catch (e) {
+                alert('网络错误，请重试');
+            }
         }
         
         function openReturnType() {
-            // 打开退换货界面
-            alert('🔄 退换货功能\n\n请说出退换货信息，如：\n"张姐退了红色M码大衣一件，退480元"');
+            openVoiceModal();
+            setTimeout(() => {
+                document.getElementById('recordStatus').textContent = '请说出退换货信息，如："张姐退了红色M码大衣一件，退480元"';
+            }, 300);
         }
         
         function openInventory() {
-            alert('📦 库存盘点\n\n请扫描或输入商品条码，填写实际库存数量');
+            openVoiceModal();
+            setTimeout(() => {
+                document.getElementById('recordStatus').textContent = '请说出盘点信息，如："盘点黑色西装外套库存15件"';
+            }, 300);
         }
         
         function openExpense() {
-            alert('💸 支出录入\n\n请说出支出信息，如：\n"今天房租15000元"\n"水电费2000元"');
+            openVoiceModal();
+            setTimeout(() => {
+                document.getElementById('recordStatus').textContent = '请说出支出信息，如："今天房租15000元"';
+            }, 300);
         }
         
         function viewHistory() {
@@ -821,7 +877,7 @@
             if (type === 'inventory') {
                 openInventory();
             } else if (type === 'message') {
-                alert('💬 老板留言\n\n注意新款外套的陈列位置，放在门口显眼处。另外周六有促销活动，请提前准备。');
+                alert('💬 暂无新消息');
             }
         }
         
@@ -838,28 +894,28 @@
             } else if (tab === 'todos') {
                 alert('待办功能开发中...');
             } else if (tab === 'profile') {
-                alert('我的\n\n' + user.name + '\n' + user.store_ids?.[0] || '');
+                alert('我的\n\n' + (user.name || '') + '\n' + (user.store_name || user.store_ids?.[0] || ''));
             }
         }
         
         async function loadTodaySummary() {
-            // 加载今日数据
+            const storeId = user.store_ids?.[0] || 'store_001';
             try {
-                const response = await fetch('/api/query', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        input_type: 'query',
-                        query_type: 'day',
-                        store_id: user.store_ids?.[0]
-                    })
+                const response = await fetch(`/api/dashboard?period=day&store_id=${storeId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
                 const data = await response.json();
-                // 更新页面数据
+                if (data.success) {
+                    const summary = data.dashboard_data?.summary || {};
+                    // 更新首页数据卡片
+                    const revenueEl = document.querySelector('.stat-value.revenue');
+                    const countEl = document.querySelector('.stat-value.count');
+                    const profitEl = document.querySelector('.stat-value.profit');
+                    if (revenueEl) revenueEl.textContent = '¥' + (summary.total_revenue || 0).toLocaleString();
+                    if (countEl) countEl.textContent = (summary.transaction_count || 0) + '笔';
+                    if (profitEl) profitEl.textContent = '¥' + (summary.gross_profit || 0).toLocaleString();
+                }
             } catch (error) {
                 console.error('加载数据失败', error);
             }

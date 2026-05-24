@@ -2,6 +2,9 @@
 let currentPeriod = 'month';
 let currentStore = 'all';
 let currentPage = 'dashboard';
+let authToken = localStorage.getItem('token') || '';
+let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+let dashboardCache = null;
 
 // 页面配置
 const pageConfig = {
@@ -18,19 +21,45 @@ const pageConfig = {
 // API基础地址
 const API_BASE = '';
 
+// 带Token的fetch
+function authFetch(url, options = {}) {
+    if (authToken) {
+        options.headers = options.headers || {};
+        options.headers['Authorization'] = `Bearer ${authToken}`;
+    }
+    return fetch(url, options);
+}
+
 // 初始化
 document.addEventListener('DOMContentLoaded', () => {
+    checkAuth();
     initNavigation();
     initDateFilter();
     initStoreSelector();
+    initHistoryFilters();
     loadDashboardData();
-    loadAnalysisData();
-    loadAlertsData();
-    loadReviewData();
-    loadHistoryData();
     initVoiceRecording();
     initImageUpload();
 });
+
+// 检查登录状态
+function checkAuth() {
+    if (!currentUser) return;
+    const nameEl = document.querySelector('.user-name');
+    const roleEl = document.querySelector('.user-role');
+    if (nameEl) nameEl.textContent = currentUser.name || currentUser.username;
+    if (roleEl) roleEl.textContent = {owner:'连锁店总管',manager:'门店店长',accountant:'财务会计'}[currentUser.role] || currentUser.role;
+    
+    // 会计隐藏审核中心、语音报账、拍照录入
+    if (currentUser.role === 'accountant') {
+        document.querySelectorAll('.nav-item').forEach(item => {
+            const page = item.dataset.page;
+            if (['review', 'voice', 'camera'].includes(page)) {
+                item.style.display = 'none';
+            }
+        });
+    }
+}
 
 // 导航初始化
 function initNavigation() {
@@ -46,19 +75,23 @@ function initNavigation() {
 function switchPage(page) {
     currentPage = page;
     
-    // 更新导航状态
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.toggle('active', item.dataset.page === page);
     });
     
-    // 更新页面标题
     document.getElementById('pageTitle').textContent = pageConfig[page]?.title || page;
     document.getElementById('pageSubtitle').textContent = pageConfig[page]?.subtitle || '';
     
-    // 切换页面显示
     document.querySelectorAll('.page').forEach(p => {
         p.classList.toggle('active', p.id === `${page}Page`);
     });
+    
+    // 按需加载页面数据
+    if (page === 'dashboard') loadDashboardData();
+    else if (page === 'analysis') loadAnalysisData();
+    else if (page === 'alerts') loadAlertsData();
+    else if (page === 'review') loadReviewData();
+    else if (page === 'history') loadHistoryData();
 }
 
 // 日期筛选
@@ -82,7 +115,7 @@ function initStoreSelector() {
             if (select && data.stores) {
                 data.stores.forEach(store => {
                     const option = document.createElement('option');
-                    option.value = store.id;
+                    option.value = store.id || store.store_id;
                     option.textContent = store.name;
                     select.appendChild(option);
                 });
@@ -95,32 +128,28 @@ function initStoreSelector() {
 function loadDashboardData() {
     showLoading();
     
-    fetch(`${API_BASE}/api/query`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            input_type: 'query',
-            query_type: currentPeriod,
-            store_id: currentStore
+    authFetch(`${API_BASE}/api/dashboard?period=${currentPeriod}&store_id=${currentStore}`)
+        .then(res => res.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                dashboardCache = data;
+                renderDashboard(data);
+            } else {
+                hideLoading();
+                showNotification('加载数据失败', 'error');
+            }
         })
-    })
-    .then(res => res.json())
-    .then(data => {
-        hideLoading();
-        renderDashboard(data);
-    })
-    .catch(err => {
-        hideLoading();
-        console.error('加载看板数据失败:', err);
-        renderDashboardWithSampleData();
-    });
+        .catch(err => {
+            hideLoading();
+            console.error('加载看板数据失败:', err);
+        });
 }
 
 // 渲染看板
 function renderDashboard(data) {
     const summary = data.dashboard_data?.summary || {};
     
-    // 更新统计卡片
     document.getElementById('totalRevenue').textContent = formatCurrency(summary.total_revenue || 0);
     document.getElementById('totalCost').textContent = formatCurrency(summary.total_cost || 0);
     document.getElementById('grossProfit').textContent = formatCurrency(summary.gross_profit || 0);
@@ -138,47 +167,14 @@ function renderDashboard(data) {
     renderCategoryStats(data.dashboard_data?.category_stats || {});
     
     // 渲染固定费用
-    renderFixedExpenses(data.dashboard_data?.fixed_expenses || {});
-}
-
-// 使用示例数据渲染（备用）
-function renderDashboardWithSampleData() {
-    const sampleData = {
-        dashboard_data: {
-            summary: {
-                total_revenue: 125800,
-                total_cost: 62800,
-                gross_profit: 63000,
-                net_profit: 45800,
-                gross_margin: 50.1,
-                transaction_count: 342
-            },
-            store_stats: {
-                '中山路店': { revenue: 45800, count: 128 },
-                '人民广场店': { revenue: 32600, count: 89 },
-                '西湖大道店': { revenue: 28400, count: 72 },
-                '滨江店': { revenue: 12800, count: 38 },
-                '城西店': { revenue: 6200, count: 15 }
-            },
-            category_stats: {
-                '连衣裙': 45200,
-                '西装外套': 32800,
-                '牛仔裤': 25400,
-                'T恤': 15800,
-                '其他': 6600
-            },
-            fixed_expenses: {
-                rent: 12000,
-                utilities: 1800,
-                salary: 25000,
-                other: 2400
-            }
-        },
-        anomaly_alerts: [
-            { type: 'low_revenue', level: 'warning', message: '城西店本周营收下降15%', store: '城西店' }
-        ]
-    };
-    renderDashboard(sampleData);
+    renderFixedExpenses(summary.fixed_expenses || {});
+    
+    // 缓存供报告导出使用
+    window.dashboardSummary = summary;
+    window.dashboardStoreStats = data.dashboard_data?.store_stats || {};
+    window.dashboardCategoryStats = data.dashboard_data?.category_stats || {};
+    window.dashboardAlerts = data.anomaly_alerts || [];
+    window.dashboardProductAnalysis = data.dashboard_data?.product_analysis || {};
 }
 
 // 格式化货币
@@ -193,6 +189,11 @@ function formatCurrency(value) {
 function renderAlerts(alerts) {
     const container = document.getElementById('alertList');
     if (!container) return;
+    
+    if (alerts.length === 0) {
+        container.innerHTML = '<div style="padding:12px;color:var(--success-color);"><i class="fas fa-check-circle"></i> 暂无异常预警</div>';
+        return;
+    }
     
     container.innerHTML = alerts.map(alert => `
         <div class="alert-item ${alert.level === 'critical' ? '' : 'warning'}">
@@ -213,13 +214,18 @@ function renderStoreComparison(storeStats) {
     if (!container) return;
     
     const stores = Object.entries(storeStats);
+    if (stores.length === 0) {
+        container.innerHTML = '<div style="padding:12px;color:var(--text-secondary);">暂无门店数据</div>';
+        return;
+    }
+    
     const maxRevenue = Math.max(...stores.map(([_, s]) => s.revenue || 0));
     
-    container.innerHTML = stores.map(([name, data]) => {
+    container.innerHTML = stores.map(([sid, data]) => {
         const percent = maxRevenue > 0 ? ((data.revenue || 0) / maxRevenue * 100) : 0;
         return `
             <div class="store-item">
-                <span class="store-name">${name}</span>
+                <span class="store-name">${data.store_name || sid}</span>
                 <div class="store-bar">
                     <div class="bar-fill" style="width: ${percent}%"></div>
                 </div>
@@ -235,6 +241,10 @@ function renderCategoryStats(categoryStats) {
     if (!container) return;
     
     const total = Object.values(categoryStats).reduce((a, b) => a + b, 0);
+    if (total === 0) {
+        container.innerHTML = '<div style="padding:12px;color:var(--text-secondary);">暂无品类数据</div>';
+        return;
+    }
     
     container.innerHTML = Object.entries(categoryStats).map(([name, value]) => {
         const percent = total > 0 ? (value / total * 100).toFixed(1) : 0;
@@ -253,168 +263,361 @@ function renderFixedExpenses(expenses) {
     const container = document.getElementById('fixedExpenses');
     if (!container) return;
     
-    const labels = {
-        rent: '房租',
-        utilities: '水电费',
-        salary: '人工成本',
-        other: '其他费用'
-    };
+    const labels = { rent: '房租', utilities: '水电费', salary: '人工成本', other: '其他费用' };
+    const total = Object.values(expenses).reduce((a, b) => a + (b || 0), 0);
+    
+    if (total === 0) {
+        container.innerHTML = '<div style="padding:12px;color:var(--text-secondary);">暂无费用数据</div>';
+        return;
+    }
     
     container.innerHTML = Object.entries(expenses).map(([key, value]) => `
         <div class="expense-item">
             <div class="expense-label">${labels[key] || key}</div>
-            <div class="expense-value">${formatCurrency(value)}</div>
+            <div class="expense-value">${formatCurrency(value || 0)}</div>
         </div>
     `).join('');
 }
 
 // 加载款式分析数据
 function loadAnalysisData() {
-    const topSellers = document.getElementById('topSellers');
-    const slowSellers = document.getElementById('slowSellers');
-    
-    if (topSellers) {
-        topSellers.innerHTML = [
-            { name: '黑色西装外套', sales: 89, revenue: 31951 },
-            { name: '红色连衣裙', sales: 76, revenue: 22624 },
-            { name: '蓝色牛仔裤', sales: 65, revenue: 12935 },
-            { name: '白色T恤', sales: 54, revenue: 4320 },
-            { name: '灰色休闲裤', sales: 48, revenue: 8640 }
-        ].map((item, index) => `
-            <div class="rank-item">
-                <span class="rank-number ${index < 3 ? 'top3' : ''}">${index + 1}</span>
-                <div class="rank-info">
-                    <div class="rank-name">${item.name}</div>
-                    <div class="rank-sales">已售 ${item.sales} 件</div>
-                </div>
-                <span class="rank-value">${formatCurrency(item.revenue)}</span>
-            </div>
-        `).join('');
-    }
-    
-    if (slowSellers) {
-        slowSellers.innerHTML = [
-            { name: '黄色短袖', days: 45, percent: 85 },
-            { name: '格纹衬衫', days: 38, percent: 72 },
-            { name: '碎花半裙', days: 32, percent: 68 }
-        ].map(item => `
-            <div class="slow-sell-item">
-                <div class="slow-sell-info">
-                    <div class="slow-sell-name">${item.name}</div>
-                    <div class="slow-sell-desc">滞销${item.days}天，库存占比${item.percent}%</div>
-                </div>
-            </div>
-        `).join('');
-    }
+    authFetch(`${API_BASE}/api/dashboard?period=${currentPeriod}&store_id=${currentStore}`)
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) return;
+            const analysis = data.dashboard_data?.product_analysis || {};
+            
+            // 畅销排行
+            const topSellers = document.getElementById('topSellers');
+            if (topSellers) {
+                const sellers = analysis.top_sellers || [];
+                if (sellers.length === 0) {
+                    topSellers.innerHTML = '<div style="padding:20px;color:var(--text-secondary);text-align:center;">暂无销售数据</div>';
+                } else {
+                    topSellers.innerHTML = sellers.map((item, index) => `
+                        <div class="rank-item">
+                            <span class="rank-number ${index < 3 ? 'top3' : ''}">${index + 1}</span>
+                            <div class="rank-info">
+                                <div class="rank-name">${item.name}</div>
+                                <div class="rank-sales">已售 ${item.quantity} 件 · ${item.category || ''}</div>
+                            </div>
+                            <span class="rank-value">${formatCurrency(item.revenue)}</span>
+                        </div>
+                    `).join('');
+                }
+            }
+            
+            // 滞销预警
+            const slowSellers = document.getElementById('slowSellers');
+            if (slowSellers) {
+                const slows = analysis.slow_sellers || [];
+                if (slows.length === 0) {
+                    slowSellers.innerHTML = '<div style="padding:20px;color:var(--success-color);text-align:center;"><i class="fas fa-check-circle"></i> 暂无滞销商品</div>';
+                } else {
+                    slowSellers.innerHTML = slows.map(item => `
+                        <div class="slow-sell-item">
+                            <div class="slow-sell-info">
+                                <div class="slow-sell-name">${item.name}</div>
+                                <div class="slow-sell-desc">仅售${item.quantity}件 · ${item.category || ''}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            }
+            
+            // AI补货建议
+            const replenish = document.getElementById('replenishSuggestions');
+            if (replenish && sellers.length > 0) {
+                replenish.innerHTML = sellers.slice(0, 5).map(item => {
+                    const suggestQty = Math.max(5, Math.round(item.quantity * 0.3));
+                    return `
+                        <div class="suggestion-item">
+                            <span class="product-name">${item.name}</span>
+                            <span class="suggestion-text">建议补货 <strong>${suggestQty}件</strong>，当前销量趋势良好</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+        })
+        .catch(err => console.error('加载款式分析失败:', err));
 }
 
 // 加载异常预警数据
 function loadAlertsData() {
-    const container = document.getElementById('alertsList');
-    if (!container) return;
-    
-    container.innerHTML = [
-        { level: 'critical', title: '营收异常', desc: '城西店连续3天营收下滑，累计下降45%', store: '城西店', time: '2024-05-24 18:00' },
-        { level: 'warning', title: '库存预警', desc: '黑色西装外套库存仅剩8件，建议补货', store: '中山路店', time: '2024-05-24 15:30' },
-        { level: 'warning', title: '成本异常', desc: '人民广场店本月成本占比达65%，高于平均', store: '人民广场店', time: '2024-05-24 12:00' }
-    ].map(alert => `
-        <div class="alert-card ${alert.level}">
-            <div class="alert-card-icon">
-                <i class="fas fa-${alert.level === 'critical' ? 'times-circle' : 'exclamation-circle'}"></i>
-            </div>
-            <div class="alert-card-content">
-                <div class="alert-card-title">${alert.title}</div>
-                <div class="alert-card-desc">${alert.desc}</div>
-                <div class="alert-card-meta">
-                    <i class="fas fa-store"></i> ${alert.store} &nbsp;|&nbsp; 
-                    <i class="fas fa-clock"></i> ${alert.time}
+    authFetch(`${API_BASE}/api/dashboard?period=${currentPeriod}&store_id=${currentStore}`)
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) return;
+            const alerts = data.anomaly_alerts || [];
+            const container = document.getElementById('alertsList');
+            if (!container) return;
+            
+            if (alerts.length === 0) {
+                container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--success-color);"><i class="fas fa-check-circle" style="font-size:48px;"></i><p style="margin-top:16px;font-size:16px;">当前无异常预警，经营状况良好</p></div>';
+                return;
+            }
+            
+            container.innerHTML = alerts.map(alert => `
+                <div class="alert-card ${alert.level}">
+                    <div class="alert-card-icon">
+                        <i class="fas fa-${alert.level === 'critical' ? 'times-circle' : 'exclamation-circle'}"></i>
+                    </div>
+                    <div class="alert-card-content">
+                        <div class="alert-card-title">${alert.type === 'low_margin' ? '毛利率异常' : alert.type === 'no_revenue' ? '营收异常' : alert.type === 'high_cost' ? '成本异常' : alert.type === 'negative_margin' ? '亏损预警' : '经营异常'}</div>
+                        <div class="alert-card-desc">${alert.message}</div>
+                    </div>
                 </div>
-            </div>
-        </div>
-    `).join('');
+            `).join('');
+        })
+        .catch(err => console.error('加载异常预警失败:', err));
 }
 
 // 加载审核数据
 function loadReviewData() {
-    const container = document.getElementById('reviewList');
-    if (!container) return;
+    authFetch(`${API_BASE}/api/reviews`)
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) return;
+            
+            const pending = data.pending || [];
+            const stats = data.stats || {};
+            const canReview = data.can_review !== false;
+            
+            // 更新统计
+            const statsContainer = document.querySelector('.review-stats');
+            if (statsContainer) {
+                statsContainer.innerHTML = `
+                    <div class="review-stat-item"><span class="stat-number">${stats.pending_count || 0}</span><span class="stat-label">待审核</span></div>
+                    <div class="review-stat-item"><span class="stat-number">${stats.approved_count || 0}</span><span class="stat-label">已通过</span></div>
+                    <div class="review-stat-item"><span class="stat-number">${stats.rejected_count || 0}</span><span class="stat-label">已驳回</span></div>
+                `;
+            }
+            
+            const container = document.getElementById('reviewList');
+            if (!container) return;
+            
+            if (pending.length === 0) {
+                container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--success-color);"><i class="fas fa-check-circle" style="font-size:48px;"></i><p style="margin-top:16px;">所有记录已审核完毕</p></div>';
+                return;
+            }
+            
+            const typeNames = {revenue:'销售', expense:'支出', return:'退货', purchase:'进货', inventory:'盘点'};
+            
+            container.innerHTML = pending.map((item, index) => `
+                <div class="review-item" id="review_${item.id}">
+                    <div class="review-header">
+                        <span class="review-store"><i class="fas fa-store"></i> ${item.store_name || item.store_id}</span>
+                        <span class="review-confidence ${(item.confidence || 0) < 0.7 ? 'low' : 'medium'}">
+                            置信度 ${((item.confidence || 0.8) * 100).toFixed(0)}%
+                        </span>
+                    </div>
+                    <div class="review-data">
+                        <div class="review-row"><span>类型</span><span>${typeNames[item.type] || item.type}</span></div>
+                        <div class="review-row"><span>商品</span><span>${(item.items || []).map(i => i.name + (i.quantity > 1 ? ' x' + i.quantity : '')).join(', ') || '-'}</span></div>
+                        <div class="review-row"><span>金额</span><span style="color: ${item.type === 'revenue' ? 'var(--success-color)' : 'var(--danger-color)'}">${formatCurrency(item.total_amount || 0)}</span></div>
+                        <div class="review-row"><span>时间</span><span>${item.created_at || ''}</span></div>
+                    </div>
+                    ${canReview ? `
+                    <div class="review-actions">
+                        <button class="btn-approve" onclick="approveReview('${item.id}')"><i class="fas fa-check"></i> 通过</button>
+                        <button class="btn-reject" onclick="rejectReview('${item.id}')"><i class="fas fa-times"></i> 驳回</button>
+                        <button class="btn-edit" onclick="editReview('${item.id}')"><i class="fas fa-edit"></i> 编辑</button>
+                    </div>` : '<div style="padding:8px;color:var(--text-secondary);font-size:13px;"><i class="fas fa-info-circle"></i> 您无权审核</div>'}
+                </div>
+            `).join('');
+        })
+        .catch(err => console.error('加载审核数据失败:', err));
+}
+
+// 审核操作 - 真实API调用
+function approveReview(recordId) {
+    authFetch(`${API_BASE}/api/records/${recordId}/approve`, { method: 'PUT' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('✅ 审核通过', 'success');
+                const el = document.getElementById('review_' + recordId);
+                if (el) el.remove();
+                loadReviewData();
+            } else {
+                showNotification('❌ 操作失败: ' + (data.message || ''), 'error');
+            }
+        })
+        .catch(err => showNotification('❌ 网络错误', 'error'));
+}
+
+function rejectReview(recordId) {
+    if (!confirm('确认驳回这条记录？')) return;
+    authFetch(`${API_BASE}/api/records/${recordId}/reject`, { method: 'PUT' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('已驳回', 'info');
+                const el = document.getElementById('review_' + recordId);
+                if (el) el.remove();
+                loadReviewData();
+            } else {
+                showNotification('❌ 操作失败: ' + (data.message || ''), 'error');
+            }
+        })
+        .catch(err => showNotification('❌ 网络错误', 'error'));
+}
+
+function editReview(recordId) {
+    const el = document.getElementById('review_' + recordId);
+    if (!el) return;
+    const item = el.querySelector('.review-data');
+    if (!item) return;
     
-    container.innerHTML = [
-        { store: '中山路店', type: '销售', items: '红色连衣裙 x1', amount: 299, confidence: 0.72, time: '18:25' },
-        { store: '人民广场店', type: '退货', items: '黑色西装外套 x1', amount: -359, confidence: 0.68, time: '17:30' },
-        { store: '西湖大道店', type: '进货', items: '牛仔裤 x10', amount: -1500, confidence: 0.75, time: '16:15' }
-    ].map((item, index) => `
-        <div class="review-item">
-            <div class="review-header">
-                <span class="review-store"><i class="fas fa-store"></i> ${item.store}</span>
-                <span class="review-confidence ${item.confidence < 0.7 ? 'low' : 'medium'}">
-                    置信度 ${(item.confidence * 100).toFixed(0)}%
-                </span>
-            </div>
-            <div class="review-data">
-                <div class="review-row">
-                    <span>类型</span>
-                    <span>${item.type}</span>
-                </div>
-                <div class="review-row">
-                    <span>商品</span>
-                    <span>${item.items}</span>
-                </div>
-                <div class="review-row">
-                    <span>金额</span>
-                    <span style="color: ${item.amount > 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${formatCurrency(Math.abs(item.amount))}</span>
-                </div>
-                <div class="review-row">
-                    <span>时间</span>
-                    <span>${item.time}</span>
-                </div>
-            </div>
-            <div class="review-actions">
-                <button class="btn-approve" onclick="approveReview(${index})"><i class="fas fa-check"></i> 通过</button>
-                <button class="btn-reject" onclick="rejectReview(${index})"><i class="fas fa-times"></i> 驳回</button>
-                <button class="btn-edit" onclick="editReview(${index})"><i class="fas fa-edit"></i> 编辑</button>
-            </div>
-        </div>
-    `).join('');
+    // 简单的行内编辑
+    const rows = item.querySelectorAll('.review-row');
+    rows.forEach(row => {
+        const valueSpan = row.querySelectorAll('span')[1];
+        if (valueSpan) {
+            valueSpan.contentEditable = true;
+            valueSpan.style.background = 'var(--input-bg)';
+            valueSpan.style.padding = '2px 6px';
+            valueSpan.style.borderRadius = '4px';
+            valueSpan.focus();
+        }
+    });
+    
+    // 添加保存按钮
+    const actions = el.querySelector('.review-actions');
+    if (actions) {
+        actions.innerHTML = `
+            <button class="btn-approve" onclick="saveEdit('${recordId}')"><i class="fas fa-save"></i> 保存</button>
+            <button class="btn-retry" onclick="loadReviewData()"><i class="fas fa-undo"></i> 取消</button>
+        `;
+    }
 }
 
-// 审核操作
-function approveReview(index) {
-    alert('已通过审核');
+function saveEdit(recordId) {
+    const el = document.getElementById('review_' + recordId);
+    if (!el) return;
+    
+    const rows = el.querySelectorAll('.review-row');
+    const data = {};
+    rows.forEach(row => {
+        const spans = row.querySelectorAll('span');
+        if (spans.length >= 2) {
+            const label = spans[0].textContent.trim();
+            const value = spans[1].textContent.trim();
+            if (label === '金额') data.total_amount = parseFloat(value.replace(/[¥,万]/g, '')) || 0;
+            if (label === '商品') data.items = [{name: value, quantity: 1, amount: data.total_amount || 0}];
+        }
+    });
+    
+    authFetch(`${API_BASE}/api/records/${recordId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(res => res.json())
+    .then(result => {
+        if (result.success) {
+            showNotification('✅ 已保存，需重新审核', 'success');
+            loadReviewData();
+        } else {
+            showNotification('❌ 保存失败', 'error');
+        }
+    })
+    .catch(err => showNotification('❌ 网络错误', 'error'));
 }
 
-function rejectReview(index) {
-    alert('已驳回');
+// 历史记录
+let historyPage = 1;
+let historyType = 'all';
+let historyDate = '';
+
+function initHistoryFilters() {
+    const typeFilter = document.getElementById('typeFilter');
+    const dateFilter = document.getElementById('dateFilter');
+    
+    if (typeFilter) {
+        typeFilter.addEventListener('change', (e) => {
+            historyType = e.target.value;
+            historyPage = 1;
+            loadHistoryData();
+        });
+    }
+    if (dateFilter) {
+        dateFilter.addEventListener('change', (e) => {
+            historyDate = e.target.value;
+            historyPage = 1;
+            loadHistoryData();
+        });
+    }
 }
 
-function editReview(index) {
-    alert('打开编辑面板');
-}
-
-// 加载历史记录
 function loadHistoryData() {
-    const container = document.getElementById('historyList');
-    if (!container) return;
+    let url = `${API_BASE}/api/records?page=${historyPage}&page_size=15&store_id=${currentStore}`;
+    if (historyType !== 'all') url += `&record_type=${historyType}`;
+    if (historyDate) url += `&start_date=${historyDate}&end_date=${historyDate}`;
     
-    container.innerHTML = [
-        { type: 'sale', title: '红色连衣裙 x1', store: '中山路店', amount: 299, time: '2024-05-24 18:25' },
-        { type: 'sale', title: '黑色西装外套 x2', store: '人民广场店', amount: 718, time: '2024-05-24 16:30' },
-        { type: 'expense', title: '房租支出', store: '西湖大道店', amount: -5000, time: '2024-05-24 10:00' },
-        { type: 'return', title: '牛仔裤退货', store: '滨江店', amount: -199, time: '2024-05-23 15:20' },
-        { type: 'sale', title: '白色T恤 x5', store: '中山路店', amount: 400, time: '2024-05-23 14:10' }
-    ].map(item => `
-        <div class="history-item">
-            <div class="history-icon ${item.type}">
-                <i class="fas fa-${item.type === 'sale' ? 'arrow-up' : item.type === 'expense' ? 'arrow-down' : 'undo'}"></i>
-            </div>
-            <div class="history-info">
-                <div class="history-title">${item.title}</div>
-                <div class="history-meta">${item.store} · ${item.time}</div>
-            </div>
-            <span class="history-amount ${item.amount > 0 ? 'positive' : 'negative'}">${item.amount > 0 ? '+' : ''}${formatCurrency(item.amount)}</span>
-        </div>
-    `).join('');
+    authFetch(url)
+        .then(res => res.json())
+        .then(data => {
+            const container = document.getElementById('historyList');
+            if (!container) return;
+            
+            const records = data.records || [];
+            if (records.length === 0) {
+                container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-secondary);">暂无记录</div>';
+                updatePagination(data);
+                return;
+            }
+            
+            const typeIcons = {revenue:'arrow-up', expense:'arrow-down', return:'undo', purchase:'truck', inventory:'clipboard-list'};
+            const typeNames = {revenue:'销售', expense:'支出', return:'退货', purchase:'进货', inventory:'盘点'};
+            
+            container.innerHTML = records.map(item => {
+                const icon = typeIcons[item.type] || 'receipt';
+                const typeName = typeNames[item.type] || item.type;
+                const amount = item.type === 'return' || item.type === 'expense' ? -(item.total_amount || 0) : (item.total_amount || 0);
+                const itemDesc = (item.items || []).map(i => `${i.name}${i.quantity > 1 ? ' x' + i.quantity : ''}`).join(', ') || typeName;
+                
+                return `
+                    <div class="history-item">
+                        <div class="history-icon ${item.type}">
+                            <i class="fas fa-${icon}"></i>
+                        </div>
+                        <div class="history-info">
+                            <div class="history-title">${itemDesc} <span style="font-size:11px;color:var(--text-secondary);">${typeName}</span></div>
+                            <div class="history-meta">${item.store_name || ''} · ${item.created_at || ''} ${item.status === 'pending' ? '<span style="color:var(--warning-color);">待审核</span>' : item.status === 'rejected' ? '<span style="color:var(--danger-color);">已驳回</span>' : ''}</div>
+                        </div>
+                        <span class="history-amount ${amount > 0 ? 'positive' : 'negative'}">${amount > 0 ? '+' : ''}${formatCurrency(Math.abs(amount))}</span>
+                    </div>
+                `;
+            }).join('');
+            
+            updatePagination(data);
+        })
+        .catch(err => console.error('加载历史记录失败:', err));
 }
+
+function updatePagination(data) {
+    const pageInfo = document.querySelector('.page-info');
+    const prevBtn = document.querySelector('.page-btn:first-child');
+    const nextBtn = document.querySelector('.page-btn:last-child');
+    
+    if (pageInfo) pageInfo.textContent = `第 ${data.page || 1} 页 / 共 ${data.total_pages || 1} 页`;
+    if (prevBtn) prevBtn.disabled = (data.page || 1) <= 1;
+    if (nextBtn) nextBtn.disabled = (data.page || 1) >= (data.total_pages || 1);
+}
+
+// 翻页
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('page-btn')) {
+        if (e.target.textContent.includes('上一页') && historyPage > 1) {
+            historyPage--;
+            loadHistoryData();
+        } else if (e.target.textContent.includes('下一页')) {
+            historyPage++;
+            loadHistoryData();
+        }
+    }
+});
 
 // 语音录制
 let mediaRecorder = null;
@@ -423,7 +626,6 @@ let audioChunks = [];
 function initVoiceRecording() {
     const recordBtn = document.getElementById('recordBtn');
     if (!recordBtn) return;
-    
     recordBtn.addEventListener('click', toggleRecording);
 }
 
@@ -434,7 +636,6 @@ async function toggleRecording() {
     if (!mediaRecorder || mediaRecorder.state === 'inactive') {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            // 优先使用webm格式，兼容Safari用mp4
             const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
                 ? 'audio/webm;codecs=opus' 
                 : MediaRecorder.isTypeSupported('audio/mp4') 
@@ -451,7 +652,7 @@ async function toggleRecording() {
             recordBtn.querySelector('span').textContent = '点击停止录音';
             statusEl.textContent = '正在录音...';
         } catch (err) {
-            alert('无法访问麦克风，请检查权限设置');
+            showNotification('无法访问麦克风，请检查权限设置', 'error');
         }
     } else {
         mediaRecorder.stop();
@@ -467,10 +668,9 @@ function processVoiceRecording() {
     const statusEl = document.getElementById('recordStatus');
     statusEl.textContent = '正在识别语音...';
     
-    // 将音频转为base64，直接发送给后端ASR识别
     const reader = new FileReader();
     reader.onloadend = function() {
-        const base64Audio = reader.result.split(',')[1]; // 去掉 data:audio/webm;base64, 前缀
+        const base64Audio = reader.result.split(',')[1];
         
         fetch(`${API_BASE}/api/voice/base64`, {
             method: 'POST',
@@ -484,11 +684,16 @@ function processVoiceRecording() {
         .then(res => res.json())
         .then(data => {
             statusEl.textContent = '识别完成';
-            showRecognitionResult(data);
+            if (data.success) {
+                showRecognitionResult(data);
+            } else {
+                showNotification('❌ 识别失败: ' + (data.error || '请重试'), 'error');
+                statusEl.textContent = '识别失败，请重试';
+            }
         })
         .catch(err => {
             statusEl.textContent = '识别失败，请重试';
-            console.error('语音识别错误:', err);
+            showNotification('❌ 网络错误', 'error');
         });
     };
     reader.readAsDataURL(blob);
@@ -544,7 +749,6 @@ function handleImageUpload(file) {
     
     showLoading();
     
-    // 第一步：上传文件到对象存储
     fetch(`${API_BASE}/api/upload`, {
         method: 'POST',
         body: formData
@@ -553,11 +757,10 @@ function handleImageUpload(file) {
     .then(uploadResult => {
         if (!uploadResult.success) {
             hideLoading();
-            alert('文件上传失败：' + (uploadResult.error || '未知错误'));
+            showNotification('❌ 文件上传失败：' + (uploadResult.error || '未知错误'), 'error');
             return;
         }
         
-        // 第二步：根据文件类型调用不同的识别接口
         const apiUrl = isPdf ? `${API_BASE}/api/document` : `${API_BASE}/api/image`;
         return fetch(apiUrl, {
             method: 'POST',
@@ -572,25 +775,31 @@ function handleImageUpload(file) {
     .then(data => {
         hideLoading();
         if (!data) return;
-        showRecognitionResult(data);
+        if (data.success) {
+            showRecognitionResult(data);
+        } else {
+            showNotification('❌ 识别失败: ' + (data.error || ''), 'error');
+        }
     })
     .catch(err => {
         hideLoading();
-        alert('识别失败，请重试');
-        console.error('文件识别错误:', err);
+        showNotification('❌ 识别失败，请重试', 'error');
     });
 }
 
 // 显示识别结果
+let lastRecognizedData = null;
+
 function showRecognitionResult(data) {
     const modal = document.getElementById('resultModal');
     const content = document.getElementById('resultContent');
     
     const extracted = data.extracted_data || {};
-    const confidence = (extracted.confidence || 0.85) * 100;
-    
-    // 根据置信度决定显示方式
+    const confidence = (extracted.confidence || data.confidence || 0.85) * 100;
     const isHighConfidence = confidence >= 80;
+    const typeNames = {revenue:'销售收入', expense:'支出', return:'退货', purchase:'进货', inventory:'盘点'};
+    
+    lastRecognizedData = data;
     
     content.innerHTML = `
         <div class="result-field">
@@ -604,9 +813,10 @@ function showRecognitionResult(data) {
         
         <div class="result-field" style="margin-top: 16px">
             <span class="field-label">交易类型</span>
-            <span class="field-value">${extracted.data_type === 'revenue' ? '销售收入' : extracted.data_type === 'expense' ? '支出' : '其他'}</span>
+            <span class="field-value">${typeNames[extracted.data_type] || extracted.data_type || '未知'}</span>
         </div>
         ${renderExtractedFields(extracted.extracted_fields || {})}
+        ${data.recognized_text ? `<div class="result-field"><span class="field-label">原文</span><span class="field-value" style="font-size:12px;color:var(--text-secondary);">${data.recognized_text}</span></div>` : ''}
         
         <div class="modal-actions">
             <button class="btn-confirm" onclick="confirmSubmit()">
@@ -634,23 +844,70 @@ function renderExtractedFields(fields) {
     return fields.items.map(item => `
         <div class="result-field">
             <span class="field-label">${item.name || '商品'}</span>
-            <span class="field-value">${item.quantity || 1}件 × ${formatCurrency(item.price || 0)}</span>
+            <span class="field-value">${item.quantity || 1}件 × ${formatCurrency(item.price || item.unit_price || 0)}</span>
         </div>
-    `).join('') + (fields.description ? `
+    `).join('') + `
         <div class="result-field">
-            <span class="field-label">备注</span>
-            <span class="field-value">${fields.description}</span>
+            <span class="field-label">合计</span>
+            <span class="field-value" style="font-weight:600;color:var(--primary-color);">${formatCurrency(fields.total_amount || 0)}</span>
+        </div>
+    ` + (fields.payment_method ? `
+        <div class="result-field">
+            <span class="field-label">支付方式</span>
+            <span class="field-value">${{wechat:'微信',alipay:'支付宝',cash:'现金',card:'银行卡',transfer:'转账'}[fields.payment_method] || fields.payment_method}</span>
         </div>
     ` : '');
 }
 
 function closeModal() {
     document.getElementById('resultModal').classList.remove('show');
+    lastRecognizedData = null;
 }
 
+// 确认提交 - 真正保存记录
 function confirmSubmit() {
-    alert('提交成功！');
-    closeModal();
+    if (!lastRecognizedData) return;
+    
+    const extracted = lastRecognizedData.extracted_data || {};
+    const fields = extracted.extracted_fields || {};
+    
+    // 获取门店名称
+    const storeSelect = document.getElementById('storeSelect');
+    const storeName = storeSelect ? storeSelect.selectedOptions[0]?.text : '';
+    
+    const record = {
+        org_id: 'org_default',
+        store_id: currentStore === 'all' ? 'store_001' : currentStore,
+        store_name: storeName || '默认门店',
+        type: extracted.data_type || 'revenue',
+        category: (fields.items && fields.items[0] && fields.items[0].category) || '',
+        items: fields.items || [],
+        total_amount: fields.total_amount || 0,
+        payment_method: fields.payment_method || '',
+        confidence: extracted.confidence || lastRecognizedData.confidence || 0.8,
+        status: (extracted.confidence || 0.8) >= 0.9 ? 'approved' : 'pending',
+        operator: currentUser ? currentUser.name : ''
+    };
+    
+    authFetch(`${API_BASE}/api/records`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(record)
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('✅ 提交成功！' + (record.status === 'pending' ? '需等待审核' : ''), 'success');
+            closeModal();
+            // 刷新看板
+            if (currentPage === 'dashboard') loadDashboardData();
+        } else {
+            showNotification('❌ 提交失败: ' + (data.message || ''), 'error');
+        }
+    })
+    .catch(err => {
+        showNotification('❌ 提交失败，请重试', 'error');
+    });
 }
 
 // 生成报告
@@ -660,31 +917,32 @@ function generateReport(type) {
     fetch(`${API_BASE}/api/report`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type })
+        body: JSON.stringify({ type, period: currentPeriod, store_id: currentStore })
     })
     .then(res => res.json())
     .then(data => {
         hideLoading();
         if (data.url) {
             window.open(data.url, '_blank');
+        } else if (data.report_url) {
+            window.open(data.report_url, '_blank');
         } else {
-            alert('报告生成成功');
+            showNotification('报告生成成功', 'success');
         }
     })
     .catch(err => {
         hideLoading();
-        alert('报告生成中...');
+        showNotification('报告生成中，请稍后重试', 'info');
     });
 }
 
-// 导出报告（支持PDF/DOCX/XLSX多格式）
+// 导出报告
 function exportReport(format = 'pdf') {
     const formatNames = { pdf: 'PDF', docx: 'Word文档', xlsx: 'Excel表格' };
     const formatName = formatNames[format] || format.toUpperCase();
     
     showLoading();
     
-    // 获取当前看板数据
     const summaryData = window.dashboardSummary || {};
     const storeStats = window.dashboardStoreStats || {};
     const categoryStats = window.dashboardCategoryStats || {};
@@ -711,7 +969,6 @@ function exportReport(format = 'pdf') {
     .then(data => {
         hideLoading();
         if (data.success && data.report_url) {
-            // 创建下载链接
             const link = document.createElement('a');
             link.href = data.report_url;
             link.download = `经营报告_${currentPeriod}.${format}`;
@@ -719,16 +976,14 @@ function exportReport(format = 'pdf') {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            
             showNotification(`✅ ${formatName}报告已生成，开始下载...`, 'success');
         } else {
-            showNotification(`❌ ${formatName}报告生成失败: ${data.message || '未知错误'}`, 'error');
+            showNotification(`❌ ${formatName}报告生成失败: ${data.message || data.error || '未知错误'}`, 'error');
         }
     })
     .catch(err => {
         hideLoading();
         showNotification(`❌ ${formatName}报告生成失败，请稍后重试`, 'error');
-        console.error('报告导出错误:', err);
     });
 }
 
@@ -755,9 +1010,7 @@ function sendReportToFeishu() {
             showNotification('❌ 发送失败: ' + (data.error || '未配置飞书机器人'), 'error');
         }
     })
-    .catch(err => {
-        showNotification('❌ 发送失败，请检查网络', 'error');
-    });
+    .catch(err => showNotification('❌ 发送失败，请检查网络', 'error'));
 }
 
 // 发送异常预警到飞书
@@ -787,14 +1040,11 @@ function sendAlertToFeishu() {
             showNotification('❌ 发送失败: ' + (data.error || '未配置飞书机器人'), 'error');
         }
     })
-    .catch(err => {
-        showNotification('❌ 发送失败，请检查网络', 'error');
-    });
+    .catch(err => showNotification('❌ 发送失败，请检查网络', 'error'));
 }
 
 // 显示通知
 function showNotification(message, type = 'info') {
-    // 创建通知元素
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
     notification.innerHTML = `
@@ -802,7 +1052,6 @@ function showNotification(message, type = 'info') {
         <button class="notification-close" onclick="this.parentElement.remove()">×</button>
     `;
     
-    // 添加样式
     notification.style.cssText = `
         position: fixed;
         top: 80px;
@@ -817,18 +1066,18 @@ function showNotification(message, type = 'info') {
         align-items: center;
         gap: 12px;
         animation: slideIn 0.3s ease-out;
+        max-width: 400px;
     `;
     
     document.body.appendChild(notification);
     
-    // 3秒后自动消失
     setTimeout(() => {
         notification.style.animation = 'slideOut 0.3s ease-in';
         setTimeout(() => notification.remove(), 300);
     }, 3000);
 }
 
-// 添加CSS动画
+// CSS动画
 const style = document.createElement('style');
 style.textContent = `
     @keyframes slideIn {

@@ -1021,9 +1021,11 @@ body {
     font-size: 18px;
 }
 
-.history-icon.sale { background: rgba(34, 197, 94, 0.2); color: var(--success-color); }
+.history-icon.sale, .history-icon.revenue { background: rgba(34, 197, 94, 0.2); color: var(--success-color); }
 .history-icon.expense { background: rgba(239, 68, 68, 0.2); color: var(--danger-color); }
 .history-icon.return { background: rgba(245, 158, 11, 0.2); color: var(--warning-color); }
+.history-icon.purchase { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+.history-icon.inventory { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
 
 .history-info {
     flex: 1;

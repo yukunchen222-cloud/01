@@ -1,0 +1,1095 @@
+{
+  "records": [
+    {
+      "id": "rec_001",
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "中山路店",
+      "type": "revenue",
+      "category": "连衣裙",
+      "items": [
+        {
+          "name": "红色连衣裙",
+          "sku": "SKU002",
+          "quantity": 2,
+          "price": 299,
+          "amount": 598
+        }
+      ],
+      "total_amount": 598,
+      "payment_method": "wechat",
+      "confidence": 0.98,
+      "status": "approved",
+      "operator": "店长张姐",
+      "created_at": "2026-05-24 09:15:00"
+    },
+    {
+      "id": "rec_002",
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "中山路店",
+      "type": "revenue",
+      "category": "外套",
+      "items": [
+        {
+          "name": "黑色西装外套",
+          "sku": "SKU001",
+          "quantity": 1,
+          "price": 359,
+          "amount": 359
+        }
+      ],
+      "total_amount": 359,
+      "payment_method": "alipay",
+      "confidence": 0.97,
+      "status": "approved",
+      "operator": "店长张姐",
+      "created_at": "2026-05-24 10:30:00"
+    },
+    {
+      "id": "rec_003",
+      "org_id": "org_default",
+      "store_id": "store_002",
+      "store_name": "人民广场店",
+      "type": "revenue",
+      "category": "裤装",
+      "items": [
+        {
+          "name": "蓝色牛仔裤",
+          "sku": "SKU004",
+          "quantity": 3,
+          "price": 199,
+          "amount": 597
+        }
+      ],
+      "total_amount": 597,
+      "payment_method": "cash",
+      "confidence": 0.96,
+      "status": "approved",
+      "operator": "店长李哥",
+      "created_at": "2026-05-24 11:00:00"
+    },
+    {
+      "id": "rec_004",
+      "org_id": "org_default",
+      "store_id": "store_003",
+      "store_name": "南京路店",
+      "type": "revenue",
+      "category": "衬衫",
+      "items": [
+        {
+          "name": "白色衬衫",
+          "sku": "SKU003",
+          "quantity": 5,
+          "price": 159,
+          "amount": 795
+        }
+      ],
+      "total_amount": 795,
+      "payment_method": "wechat",
+      "confidence": 0.95,
+      "status": "approved",
+      "operator": "店长王芳",
+      "created_at": "2026-05-24 11:45:00"
+    },
+    {
+      "id": "rec_005",
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "中山路店",
+      "type": "revenue",
+      "category": "连衣裙",
+      "items": [
+        {
+          "name": "碎花半裙",
+          "sku": "SKU006",
+          "quantity": 1,
+          "price": 259,
+          "amount": 259
+        }
+      ],
+      "total_amount": 259,
+      "payment_method": "wechat",
+      "confidence": 0.93,
+      "status": "approved",
+      "operator": "店长张姐",
+      "created_at": "2026-05-24 13:20:00"
+    },
+    {
+      "id": "rec_006",
+      "org_id": "org_default",
+      "store_id": "store_004",
+      "store_name": "淮海路店",
+      "type": "revenue",
+      "category": "外套",
+      "items": [
+        {
+          "name": "灰色风衣",
+          "sku": "SKU005",
+          "quantity": 2,
+          "price": 459,
+          "amount": 918
+        }
+      ],
+      "total_amount": 918,
+      "payment_method": "card",
+      "confidence": 0.97,
+      "status": "approved",
+      "operator": "店长刘洋",
+      "created_at": "2026-05-24 14:00:00"
+    },
+    {
+      "id": "rec_007",
+      "org_id": "org_default",
+      "store_id": "store_002",
+      "store_name": "人民广场店",
+      "type": "revenue",
+      "category": "连衣裙",
+      "items": [
+        {
+          "name": "红色连衣裙",
+          "sku": "SKU002",
+          "quantity": 1,
+          "price": 299,
+          "amount": 299
+        }
+      ],
+      "total_amount": 299,
+      "payment_method": "alipay",
+      "confidence": 0.98,
+      "status": "approved",
+      "operator": "店长李哥",
+      "created_at": "2026-05-24 14:30:00"
+    },
+    {
+      "id": "rec_008",
+      "org_id": "org_default",
+      "store_id": "store_003",
+      "store_name": "南京路店",
+      "type": "revenue",
+      "category": "裤装",
+      "items": [
+        {
+          "name": "蓝色牛仔裤",
+          "sku": "SKU004",
+          "quantity": 2,
+          "price": 199,
+          "amount": 398
+        }
+      ],
+      "total_amount": 398,
+      "payment_method": "cash",
+      "confidence": 0.96,
+      "status": "approved",
+      "operator": "店长王芳",
+      "created_at": "2026-05-24 15:00:00"
+    },
+    {
+      "id": "rec_009",
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "中山路店",
+      "type": "revenue",
+      "category": "衬衫",
+      "items": [
+        {
+          "name": "白色衬衫",
+          "sku": "SKU003",
+          "quantity": 3,
+          "price": 159,
+          "amount": 477
+        }
+      ],
+      "total_amount": 477,
+      "payment_method": "wechat",
+      "confidence": 0.94,
+      "status": "approved",
+      "operator": "店长张姐",
+      "created_at": "2026-05-24 15:45:00"
+    },
+    {
+      "id": "rec_010",
+      "org_id": "org_default",
+      "store_id": "store_004",
+      "store_name": "淮海路店",
+      "type": "revenue",
+      "category": "连衣裙",
+      "items": [
+        {
+          "name": "碎花半裙",
+          "sku": "SKU006",
+          "quantity": 2,
+          "price": 259,
+          "amount": 518
+        }
+      ],
+      "total_amount": 518,
+      "payment_method": "wechat",
+      "confidence": 0.92,
+      "status": "approved",
+      "operator": "店长刘洋",
+      "created_at": "2026-05-24 16:00:00"
+    },
+    {
+      "id": "rec_011",
+      "org_id": "org_default",
+      "store_id": "store_002",
+      "store_name": "人民广场店",
+      "type": "purchase",
+      "category": "外套",
+      "items": [
+        {
+          "name": "黑色西装外套",
+          "sku": "SKU001",
+          "quantity": 10,
+          "price": 150,
+          "amount": 1500
+        }
+      ],
+      "total_amount": 1500,
+      "payment_method": "transfer",
+      "confidence": 0.99,
+      "status": "approved",
+      "operator": "店长李哥",
+      "created_at": "2026-05-24 08:00:00"
+    },
+    {
+      "id": "rec_012",
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "中山路店",
+      "type": "purchase",
+      "category": "连衣裙",
+      "items": [
+        {
+          "name": "红色连衣裙",
+          "sku": "SKU002",
+          "quantity": 8,
+          "price": 120,
+          "amount": 960
+        }
+      ],
+      "total_amount": 960,
+      "payment_method": "transfer",
+      "confidence": 0.99,
+      "status": "approved",
+      "operator": "店长张姐",
+      "created_at": "2026-05-24 08:30:00"
+    },
+    {
+      "id": "rec_013",
+      "org_id": "org_default",
+      "store_id": "store_003",
+      "store_name": "南京路店",
+      "type": "purchase",
+      "category": "裤装",
+      "items": [
+        {
+          "name": "蓝色牛仔裤",
+          "sku": "SKU004",
+          "quantity": 15,
+          "price": 80,
+          "amount": 1200
+        }
+      ],
+      "total_amount": 1200,
+      "payment_method": "transfer",
+      "confidence": 0.99,
+      "status": "approved",
+      "operator": "店长王芳",
+      "created_at": "2026-05-24 09:00:00"
+    },
+    {
+      "id": "rec_014",
+      "org_id": "org_default",
+      "store_id": "store_004",
+      "store_name": "淮海路店",
+      "type": "purchase",
+      "category": "外套",
+      "items": [
+        {
+          "name": "灰色风衣",
+          "sku": "SKU005",
+          "quantity": 5,
+          "price": 200,
+          "amount": 1000
+        }
+      ],
+      "total_amount": 1000,
+      "payment_method": "transfer",
+      "confidence": 0.99,
+      "status": "approved",
+      "operator": "店长刘洋",
+      "created_at": "2026-05-24 09:30:00"
+    },
+    {
+      "id": "rec_015",
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "中山路店",
+      "type": "expense",
+      "category": "房租",
+      "items": [
+        {
+          "name": "5月房租",
+          "quantity": 1,
+          "price": 5000,
+          "amount": 5000
+        }
+      ],
+      "total_amount": 5000,
+      "payment_method": "transfer",
+      "confidence": 1.0,
+      "status": "approved",
+      "operator": "店长张姐",
+      "created_at": "2026-05-01 10:00:00"
+    },
+    {
+      "id": "rec_016",
+      "org_id": "org_default",
+      "store_id": "store_002",
+      "store_name": "人民广场店",
+      "type": "expense",
+      "category": "房租",
+      "items": [
+        {
+          "name": "5月房租",
+          "quantity": 1,
+          "price": 4500,
+          "amount": 4500
+        }
+      ],
+      "total_amount": 4500,
+      "payment_method": "transfer",
+      "confidence": 1.0,
+      "status": "approved",
+      "operator": "店长李哥",
+      "created_at": "2026-05-01 10:00:00"
+    },
+    {
+      "id": "rec_017",
+      "org_id": "org_default",
+      "store_id": "store_003",
+      "store_name": "南京路店",
+      "type": "expense",
+      "category": "房租",
+      "items": [
+        {
+          "name": "5月房租",
+          "quantity": 1,
+          "price": 3800,
+          "amount": 3800
+        }
+      ],
+      "total_amount": 3800,
+      "payment_method": "transfer",
+      "confidence": 1.0,
+      "status": "approved",
+      "operator": "店长王芳",
+      "created_at": "2026-05-01 10:00:00"
+    },
+    {
+      "id": "rec_018",
+      "org_id": "org_default",
+      "store_id": "store_004",
+      "store_name": "淮海路店",
+      "type": "expense",
+      "category": "房租",
+      "items": [
+        {
+          "name": "5月房租",
+          "quantity": 1,
+          "price": 4200,
+          "amount": 4200
+        }
+      ],
+      "total_amount": 4200,
+      "payment_method": "transfer",
+      "confidence": 1.0,
+      "status": "approved",
+      "operator": "店长刘洋",
+      "created_at": "2026-05-01 10:00:00"
+    },
+    {
+      "id": "rec_019",
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "中山路店",
+      "type": "expense",
+      "category": "水电费",
+      "items": [
+        {
+          "name": "5月水电费",
+          "quantity": 1,
+          "price": 800,
+          "amount": 800
+        }
+      ],
+      "total_amount": 800,
+      "payment_method": "transfer",
+      "confidence": 1.0,
+      "status": "approved",
+      "operator": "店长张姐",
+      "created_at": "2026-05-05 10:00:00"
+    },
+    {
+      "id": "rec_020",
+      "org_id": "org_default",
+      "store_id": "store_002",
+      "store_name": "人民广场店",
+      "type": "expense",
+      "category": "水电费",
+      "items": [
+        {
+          "name": "5月水电费",
+          "quantity": 1,
+          "price": 650,
+          "amount": 650
+        }
+      ],
+      "total_amount": 650,
+      "payment_method": "transfer",
+      "confidence": 1.0,
+      "status": "approved",
+      "operator": "店长李哥",
+      "created_at": "2026-05-05 10:00:00"
+    },
+    {
+      "id": "rec_021",
+      "org_id": "org_default",
+      "store_id": "store_003",
+      "store_name": "南京路店",
+      "type": "expense",
+      "category": "水电费",
+      "items": [
+        {
+          "name": "5月水电费",
+          "quantity": 1,
+          "price": 720,
+          "amount": 720
+        }
+      ],
+      "total_amount": 720,
+      "payment_method": "transfer",
+      "confidence": 1.0,
+      "status": "approved",
+      "operator": "店长王芳",
+      "created_at": "2026-05-05 10:00:00"
+    },
+    {
+      "id": "rec_022",
+      "org_id": "org_default",
+      "store_id": "store_004",
+      "store_name": "淮海路店",
+      "type": "expense",
+      "category": "水电费",
+      "items": [
+        {
+          "name": "5月水电费",
+          "quantity": 1,
+          "price": 580,
+          "amount": 580
+        }
+      ],
+      "total_amount": 580,
+      "payment_method": "transfer",
+      "confidence": 1.0,
+      "status": "approved",
+      "operator": "店长刘洋",
+      "created_at": "2026-05-05 10:00:00"
+    },
+    {
+      "id": "rec_023",
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "中山路店",
+      "type": "expense",
+      "category": "人工",
+      "items": [
+        {
+          "name": "5月工资",
+          "quantity": 1,
+          "price": 12000,
+          "amount": 12000
+        }
+      ],
+      "total_amount": 12000,
+      "payment_method": "transfer",
+      "confidence": 1.0,
+      "status": "approved",
+      "operator": "店长张姐",
+      "created_at": "2026-05-10 10:00:00"
+    },
+    {
+      "id": "rec_024",
+      "org_id": "org_default",
+      "store_id": "store_002",
+      "store_name": "人民广场店",
+      "type": "expense",
+      "category": "人工",
+      "items": [
+        {
+          "name": "5月工资",
+          "quantity": 1,
+          "price": 10000,
+          "amount": 10000
+        }
+      ],
+      "total_amount": 10000,
+      "payment_method": "transfer",
+      "confidence": 1.0,
+      "status": "approved",
+      "operator": "店长李哥",
+      "created_at": "2026-05-10 10:00:00"
+    },
+    {
+      "id": "rec_025",
+      "org_id": "org_default",
+      "store_id": "store_003",
+      "store_name": "南京路店",
+      "type": "expense",
+      "category": "人工",
+      "items": [
+        {
+          "name": "5月工资",
+          "quantity": 1,
+          "price": 11000,
+          "amount": 11000
+        }
+      ],
+      "total_amount": 11000,
+      "payment_method": "transfer",
+      "confidence": 1.0,
+      "status": "approved",
+      "operator": "店长王芳",
+      "created_at": "2026-05-10 10:00:00"
+    },
+    {
+      "id": "rec_026",
+      "org_id": "org_default",
+      "store_id": "store_004",
+      "store_name": "淮海路店",
+      "type": "expense",
+      "category": "人工",
+      "items": [
+        {
+          "name": "5月工资",
+          "quantity": 1,
+          "price": 9500,
+          "amount": 9500
+        }
+      ],
+      "total_amount": 9500,
+      "payment_method": "transfer",
+      "confidence": 1.0,
+      "status": "approved",
+      "operator": "店长刘洋",
+      "created_at": "2026-05-10 10:00:00"
+    },
+    {
+      "id": "rec_027",
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "中山路店",
+      "type": "return",
+      "category": "外套",
+      "items": [
+        {
+          "name": "黑色西装外套",
+          "sku": "SKU001",
+          "quantity": 1,
+          "price": 359,
+          "amount": 359
+        }
+      ],
+      "total_amount": 359,
+      "payment_method": "wechat_refund",
+      "confidence": 0.88,
+      "status": "pending",
+      "operator": "店长张姐",
+      "created_at": "2026-05-24 16:30:00"
+    },
+    {
+      "id": "rec_028",
+      "org_id": "org_default",
+      "store_id": "store_002",
+      "store_name": "人民广场店",
+      "type": "return",
+      "category": "衬衫",
+      "items": [
+        {
+          "name": "白色衬衫",
+          "sku": "SKU003",
+          "quantity": 1,
+          "price": 159,
+          "amount": 159
+        }
+      ],
+      "total_amount": 159,
+      "payment_method": "cash_refund",
+      "confidence": 0.72,
+      "status": "pending",
+      "operator": "店长李哥",
+      "created_at": "2026-05-24 17:00:00"
+    },
+    {
+      "id": "rec_029",
+      "org_id": "org_default",
+      "store_id": "store_003",
+      "store_name": "南京路店",
+      "type": "revenue",
+      "category": "外套",
+      "items": [
+        {
+          "name": "黑色西装外套",
+          "sku": "SKU001",
+          "quantity": 1,
+          "price": 359,
+          "amount": 359
+        }
+      ],
+      "total_amount": 359,
+      "payment_method": "wechat",
+      "confidence": 0.65,
+      "status": "pending",
+      "operator": "店长王芳",
+      "created_at": "2026-05-24 17:30:00"
+    },
+    {
+      "id": "rec_030",
+      "org_id": "org_default",
+      "store_id": "store_004",
+      "store_name": "淮海路店",
+      "type": "revenue",
+      "category": "连衣裙",
+      "items": [
+        {
+          "name": "红色连衣裙",
+          "sku": "SKU002",
+          "quantity": 1,
+          "price": 299,
+          "amount": 299
+        }
+      ],
+      "total_amount": 299,
+      "payment_method": "alipay",
+      "confidence": 0.58,
+      "status": "approved",
+      "operator": "店长刘洋",
+      "created_at": "2026-05-24 18:00:00"
+    },
+    {
+      "id": "rec_031",
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "中山路店",
+      "type": "revenue",
+      "category": "裤装",
+      "items": [
+        {
+          "name": "蓝色牛仔裤",
+          "sku": "SKU004",
+          "quantity": 1,
+          "price": 199,
+          "amount": 199
+        }
+      ],
+      "total_amount": 199,
+      "payment_method": "cash",
+      "confidence": 0.91,
+      "status": "approved",
+      "operator": "店长张姐",
+      "created_at": "2026-05-23 10:00:00"
+    },
+    {
+      "id": "rec_032",
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "中山路店",
+      "type": "revenue",
+      "category": "衬衫",
+      "items": [
+        {
+          "name": "白色衬衫",
+          "sku": "SKU003",
+          "quantity": 2,
+          "price": 159,
+          "amount": 318
+        }
+      ],
+      "total_amount": 318,
+      "payment_method": "wechat",
+      "confidence": 0.95,
+      "status": "approved",
+      "operator": "店长张姐",
+      "created_at": "2026-05-23 11:00:00"
+    },
+    {
+      "id": "rec_033",
+      "org_id": "org_default",
+      "store_id": "store_002",
+      "store_name": "人民广场店",
+      "type": "revenue",
+      "category": "外套",
+      "items": [
+        {
+          "name": "灰色风衣",
+          "sku": "SKU005",
+          "quantity": 1,
+          "price": 459,
+          "amount": 459
+        }
+      ],
+      "total_amount": 459,
+      "payment_method": "card",
+      "confidence": 0.93,
+      "status": "approved",
+      "operator": "店长李哥",
+      "created_at": "2026-05-23 12:00:00"
+    },
+    {
+      "id": "rec_034",
+      "org_id": "org_default",
+      "store_id": "store_003",
+      "store_name": "南京路店",
+      "type": "revenue",
+      "category": "连衣裙",
+      "items": [
+        {
+          "name": "碎花半裙",
+          "sku": "SKU006",
+          "quantity": 3,
+          "price": 259,
+          "amount": 777
+        }
+      ],
+      "total_amount": 777,
+      "payment_method": "wechat",
+      "confidence": 0.96,
+      "status": "approved",
+      "operator": "店长王芳",
+      "created_at": "2026-05-23 14:00:00"
+    },
+    {
+      "id": "rec_035",
+      "org_id": "org_default",
+      "store_id": "store_004",
+      "store_name": "淮海路店",
+      "type": "revenue",
+      "category": "裤装",
+      "items": [
+        {
+          "name": "蓝色牛仔裤",
+          "sku": "SKU004",
+          "quantity": 2,
+          "price": 199,
+          "amount": 398
+        }
+      ],
+      "total_amount": 398,
+      "payment_method": "alipay",
+      "confidence": 0.94,
+      "status": "approved",
+      "operator": "店长刘洋",
+      "created_at": "2026-05-23 15:00:00"
+    },
+    {
+      "id": "rec_036",
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "中山路店",
+      "type": "revenue",
+      "category": "外套",
+      "items": [
+        {
+          "name": "黑色西装外套",
+          "sku": "SKU001",
+          "quantity": 2,
+          "price": 359,
+          "amount": 718
+        }
+      ],
+      "total_amount": 718,
+      "payment_method": "wechat",
+      "confidence": 0.97,
+      "status": "approved",
+      "operator": "店长张姐",
+      "created_at": "2026-05-22 09:30:00"
+    },
+    {
+      "id": "rec_037",
+      "org_id": "org_default",
+      "store_id": "store_002",
+      "store_name": "人民广场店",
+      "type": "revenue",
+      "category": "连衣裙",
+      "items": [
+        {
+          "name": "红色连衣裙",
+          "sku": "SKU002",
+          "quantity": 3,
+          "price": 299,
+          "amount": 897
+        }
+      ],
+      "total_amount": 897,
+      "payment_method": "card",
+      "confidence": 0.96,
+      "status": "approved",
+      "operator": "店长李哥",
+      "created_at": "2026-05-22 10:00:00"
+    },
+    {
+      "id": "rec_038",
+      "org_id": "org_default",
+      "store_id": "store_003",
+      "store_name": "南京路店",
+      "type": "revenue",
+      "category": "衬衫",
+      "items": [
+        {
+          "name": "白色衬衫",
+          "sku": "SKU003",
+          "quantity": 4,
+          "price": 159,
+          "amount": 636
+        }
+      ],
+      "total_amount": 636,
+      "payment_method": "cash",
+      "confidence": 0.95,
+      "status": "approved",
+      "operator": "店长王芳",
+      "created_at": "2026-05-22 11:00:00"
+    },
+    {
+      "id": "rec_039",
+      "org_id": "org_default",
+      "store_id": "store_004",
+      "store_name": "淮海路店",
+      "type": "revenue",
+      "category": "外套",
+      "items": [
+        {
+          "name": "灰色风衣",
+          "sku": "SKU005",
+          "quantity": 1,
+          "price": 459,
+          "amount": 459
+        }
+      ],
+      "total_amount": 459,
+      "payment_method": "wechat",
+      "confidence": 0.93,
+      "status": "approved",
+      "operator": "店长刘洋",
+      "created_at": "2026-05-22 14:00:00"
+    },
+    {
+      "id": "rec_040",
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "中山路店",
+      "type": "revenue",
+      "category": "连衣裙",
+      "items": [
+        {
+          "name": "碎花半裙",
+          "sku": "SKU006",
+          "quantity": 2,
+          "price": 259,
+          "amount": 518
+        }
+      ],
+      "total_amount": 518,
+      "payment_method": "alipay",
+      "confidence": 0.94,
+      "status": "approved",
+      "operator": "店长张姐",
+      "created_at": "2026-05-22 16:00:00"
+    },
+    {
+      "id": "rec_041",
+      "org_id": "org_default",
+      "store_id": "store_002",
+      "store_name": "人民广场店",
+      "type": "expense",
+      "category": "其他",
+      "items": [
+        {
+          "name": "店面维修",
+          "quantity": 1,
+          "price": 1200,
+          "amount": 1200
+        }
+      ],
+      "total_amount": 1200,
+      "payment_method": "transfer",
+      "confidence": 1.0,
+      "status": "approved",
+      "operator": "店长李哥",
+      "created_at": "2026-05-15 10:00:00"
+    },
+    {
+      "id": "rec_042",
+      "org_id": "org_default",
+      "store_id": "store_003",
+      "store_name": "南京路店",
+      "type": "revenue",
+      "category": "裤装",
+      "items": [
+        {
+          "name": "蓝色牛仔裤",
+          "sku": "SKU004",
+          "quantity": 4,
+          "price": 199,
+          "amount": 796
+        }
+      ],
+      "total_amount": 796,
+      "payment_method": "wechat",
+      "confidence": 0.96,
+      "status": "approved",
+      "operator": "店长王芳",
+      "created_at": "2026-05-21 10:00:00"
+    },
+    {
+      "id": "rec_043",
+      "org_id": "org_default",
+      "store_id": "store_004",
+      "store_name": "淮海路店",
+      "type": "purchase",
+      "category": "衬衫",
+      "items": [
+        {
+          "name": "白色衬衫",
+          "sku": "SKU003",
+          "quantity": 20,
+          "price": 60,
+          "amount": 1200
+        }
+      ],
+      "total_amount": 1200,
+      "payment_method": "transfer",
+      "confidence": 0.99,
+      "status": "approved",
+      "operator": "店长刘洋",
+      "created_at": "2026-05-20 08:00:00"
+    },
+    {
+      "id": "rec_044",
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "中山路店",
+      "type": "revenue",
+      "category": "连衣裙",
+      "items": [
+        {
+          "name": "红色连衣裙",
+          "sku": "SKU002",
+          "quantity": 3,
+          "price": 299,
+          "amount": 897
+        }
+      ],
+      "total_amount": 897,
+      "payment_method": "wechat",
+      "confidence": 0.97,
+      "status": "approved",
+      "operator": "店长张姐",
+      "created_at": "2026-05-21 14:00:00"
+    },
+    {
+      "id": "rec_045",
+      "org_id": "org_default",
+      "store_id": "store_002",
+      "store_name": "人民广场店",
+      "type": "revenue",
+      "category": "衬衫",
+      "items": [
+        {
+          "name": "白色衬衫",
+          "sku": "SKU003",
+          "quantity": 2,
+          "price": 159,
+          "amount": 318
+        }
+      ],
+      "total_amount": 318,
+      "payment_method": "cash",
+      "confidence": 0.95,
+      "status": "approved",
+      "operator": "店长李哥",
+      "created_at": "2026-05-21 15:00:00"
+    },
+    {
+      "id": "rec_046",
+      "org_id": "org_default",
+      "store_id": "store_004",
+      "store_name": "淮海路店",
+      "type": "expense",
+      "category": "房租",
+      "items": [
+        {
+          "name": "5月额外仓储费",
+          "quantity": 1,
+          "price": 1500,
+          "amount": 1500
+        }
+      ],
+      "total_amount": 1500,
+      "payment_method": "transfer",
+      "confidence": 1.0,
+      "status": "approved",
+      "operator": "店长刘洋",
+      "created_at": "2026-05-12 10:00:00"
+    },
+    {
+      "id": "rec_047",
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "中山路店",
+      "type": "inventory",
+      "category": "连衣裙",
+      "items": [
+        {
+          "name": "红色连衣裙盘点",
+          "sku": "SKU002",
+          "quantity": 30,
+          "price": 0,
+          "amount": 0
+        }
+      ],
+      "total_amount": 0,
+      "payment_method": "",
+      "confidence": 0.9,
+      "status": "approved",
+      "operator": "店长张姐",
+      "created_at": "2026-05-20 18:00:00"
+    },
+    {
+      "id": "rec_048",
+      "org_id": "org_default",
+      "store_id": "store_003",
+      "store_name": "南京路店",
+      "type": "return",
+      "category": "裤装",
+      "items": [
+        {
+          "name": "蓝色牛仔裤退货",
+          "sku": "SKU004",
+          "quantity": 1,
+          "price": 199,
+          "amount": 199
+        }
+      ],
+      "total_amount": 199,
+      "payment_method": "cash_refund",
+      "confidence": 0.85,
+      "status": "pending",
+      "operator": "店长王芳",
+      "created_at": "2026-05-24 18:30:00"
+    }
+  ],
+  "next_id": 49
+}

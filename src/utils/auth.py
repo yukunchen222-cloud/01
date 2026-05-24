@@ -20,6 +20,7 @@ USERS_FILE = os.path.join(os.getenv("COZE_WORKSPACE_PATH", "/workspace/projects"
 ORGANIZATIONS_FILE = os.path.join(os.getenv("COZE_WORKSPACE_PATH", "/workspace/projects"), "data/organizations.json")
 STORES_FILE = os.path.join(os.getenv("COZE_WORKSPACE_PATH", "/workspace/projects"), "data/stores.json")
 PRODUCTS_FILE = os.path.join(os.getenv("COZE_WORKSPACE_PATH", "/workspace/projects"), "data/products.json")
+RECORDS_FILE = os.path.join(os.getenv("COZE_WORKSPACE_PATH", "/workspace/projects"), "data/records.json")
 
 
 class UserRole(str):

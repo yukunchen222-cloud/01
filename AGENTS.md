@@ -79,14 +79,19 @@
 ### 业务相关
 | 端点 | 方法 | 说明 |
 |------|------|------|
-| `/api/voice` | POST | 语音报账 |
-| `/api/voice/upload` | POST | 语音上传识别 |
-| `/api/image` | POST | 图片识别 |
-| `/api/image/upload` | POST | 图片上传识别 |
-| `/api/query` | POST | 数据查询 |
+| `/api/voice/base64` | POST | 语音报账(base64音频→ASR→NLU) |
+| `/api/image` | POST | 图片识别(file_url→OCR→NLU) |
+| `/api/document` | POST | PDF文档识别(file_url→提取文本→NLU) |
+| `/api/upload` | POST | 文件上传到对象存储 |
+| `/api/dashboard` | GET | 看板数据(真实统计，支持period/store_id) |
+| `/api/records` | GET | 历史记录(分页、日期筛选、类型筛选) |
+| `/api/records` | POST | 创建交易记录(确认提交) |
+| `/api/records/{id}/approve` | PUT | 审核通过 |
+| `/api/records/{id}/reject` | PUT | 审核驳回 |
+| `/api/records/{id}` | PUT | 编辑记录 |
+| `/api/reviews` | GET | 待审核记录列表 |
 | `/api/stores` | GET | 门店列表 |
-| `/api/stores/list` | GET | 门店列表(带权限) |
-| `/api/records` | GET | 历史记录 |
+| `/api/products` | GET/POST | 商品CRUD |
 
 ### 报告相关
 | 端点 | 方法 | 说明 |
