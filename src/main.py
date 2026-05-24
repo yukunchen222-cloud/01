@@ -239,7 +239,9 @@ app = FastAPI()
 
 # 挂载静态文件目录
 import os
-_static_dir = os.path.join(os.getenv("COZE_WORKSPACE_PATH", "/workspace/projects"), "assets")
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_workspace = os.getenv("COZE_WORKSPACE_PATH", _project_root)
+_static_dir = os.path.join(_workspace, "assets")
 if os.path.exists(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
@@ -263,15 +265,20 @@ async def web_ui():
     return await web_home()
 
 @app.get("/api/stores")
-async def get_stores():
-    """获取门店列表"""
-    stores = [
-        {"id": "store_001", "name": "中山路店", "address": "中山路128号"},
-        {"id": "store_002", "name": "解放路店", "address": "解放路256号"},
-        {"id": "store_003", "name": "人民广场店", "address": "人民广场东侧"},
-        {"id": "store_004", "name": "万达广场店", "address": "万达广场3楼"},
-        {"id": "store_005", "name": "银泰城店", "address": "银泰城2楼"},
-    ]
+async def get_stores(request: Request):
+    """获取门店列表（从stores.json读取真实数据）"""
+    from utils.auth import get_stores_by_org, decode_token
+
+    org_id = "org_default"
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        payload = decode_token(token)
+        if payload:
+            org_id = payload.get("org_id", org_id)
+
+    all_stores = get_stores_by_org(org_id)
+    stores = [{"id": s.store_id, "store_id": s.store_id, "name": s.name, "address": s.address} for s in all_stores]
     return {"success": True, "stores": stores}
 
 @app.post("/api/query")

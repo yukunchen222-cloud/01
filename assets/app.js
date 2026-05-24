@@ -96,6 +96,13 @@ function switchPage(page) {
 
 // 日期筛选
 function initDateFilter() {
+    // 设置默认日期为当月第一天
+    const dateFilter = document.getElementById('dateFilter');
+    if (dateFilter) {
+        const now = new Date();
+        dateFilter.value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-01';
+    }
+
     document.querySelectorAll('.date-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('active'));
@@ -168,13 +175,136 @@ function renderDashboard(data) {
     
     // 渲染固定费用
     renderFixedExpenses(summary.fixed_expenses || {});
-    
+
+    // 渲染图表（延迟渲染确保Canvas存在）
+    setTimeout(() => {
+        renderTrendChart(summary, data.dashboard_data?.store_stats || {});
+        renderCategoryPieChart(data.dashboard_data?.category_stats || {});
+    }, 200);
+
     // 缓存供报告导出使用
     window.dashboardSummary = summary;
     window.dashboardStoreStats = data.dashboard_data?.store_stats || {};
     window.dashboardCategoryStats = data.dashboard_data?.category_stats || {};
     window.dashboardAlerts = data.anomaly_alerts || [];
     window.dashboardProductAnalysis = data.dashboard_data?.product_analysis || {};
+}
+
+// Chart.js 实例缓存
+let trendChartInstance = null;
+let categoryChartInstance = null;
+
+// 渲染营收趋势图
+function renderTrendChart(summary, storeStats) {
+    const canvas = document.getElementById('trendChart');
+    if (!canvas) return;
+
+    if (trendChartInstance) {
+        trendChartInstance.destroy();
+        trendChartInstance = null;
+    }
+
+    const ctx = canvas.getContext('2d');
+    const stores = Object.entries(storeStats || {});
+    const hasData = stores.length > 0 && stores.some(([_, s]) => (s.revenue || 0) > 0);
+
+    if (!hasData) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#999';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('暂无门店营收数据', canvas.width / 2, canvas.height / 2);
+        return;
+    }
+
+    const labels = stores.map(([sid, s]) => s.store_name || sid);
+    const revenues = stores.map(([_, s]) => s.revenue || 0);
+    const costs = stores.map(([_, s]) => s.cost || 0);
+
+    const colors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b', '#fa709a'];
+
+    trendChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: '营收',
+                    data: revenues,
+                    backgroundColor: colors.slice(0, labels.length),
+                    borderRadius: 6
+                },
+                {
+                    label: '成本',
+                    data: costs,
+                    backgroundColor: 'rgba(255, 99, 132, 0.3)',
+                    borderColor: 'rgba(255, 99, 132, 0.8)',
+                    borderWidth: 1,
+                    borderRadius: 6
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#999', font: { size: 12 } } }
+            },
+            scales: {
+                x: { ticks: { color: '#999' }, grid: { display: false } },
+                y: { ticks: { color: '#999', callback: v => v >= 10000 ? (v/10000).toFixed(1)+'万' : v }, grid: { color: 'rgba(255,255,255,0.05)' } }
+            }
+        }
+    });
+}
+
+// 渲染品类占比饼图
+function renderCategoryPieChart(categoryStats) {
+    const canvas = document.getElementById('categoryChart');
+    if (!canvas) return;
+
+    if (categoryChartInstance) {
+        categoryChartInstance.destroy();
+        categoryChartInstance = null;
+    }
+
+    const ctx = canvas.getContext('2d');
+    const entries = Object.entries(categoryStats || {});
+    const total = entries.reduce((sum, [_, v]) => sum + v, 0);
+
+    if (total === 0) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#999';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('暂无品类销售数据', canvas.width / 2, canvas.height / 2);
+        return;
+    }
+
+    const pieColors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#f5576c', '#ff9800'];
+
+    categoryChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: entries.map(([name, _]) => name),
+            datasets: [{
+                data: entries.map(([_, v]) => v),
+                backgroundColor: pieColors.slice(0, entries.length),
+                borderWidth: 2,
+                borderColor: '#1a1a2e'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: { color: '#ccc', font: { size: 12 }, padding: 12 }
+                }
+            }
+        }
+    });
 }
 
 // 格式化货币

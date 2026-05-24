@@ -15,12 +15,14 @@ JWT_SECRET = os.getenv("JWT_SECRET", "coze_clothing_ai_secret_key_2024")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = 24
 
-# 用户数据文件路径
-USERS_FILE = os.path.join(os.getenv("COZE_WORKSPACE_PATH", "/workspace/projects"), "data/users.json")
-ORGANIZATIONS_FILE = os.path.join(os.getenv("COZE_WORKSPACE_PATH", "/workspace/projects"), "data/organizations.json")
-STORES_FILE = os.path.join(os.getenv("COZE_WORKSPACE_PATH", "/workspace/projects"), "data/stores.json")
-PRODUCTS_FILE = os.path.join(os.getenv("COZE_WORKSPACE_PATH", "/workspace/projects"), "data/products.json")
-RECORDS_FILE = os.path.join(os.getenv("COZE_WORKSPACE_PATH", "/workspace/projects"), "data/records.json")
+# 用户数据文件路径 - 优先使用环境变量，fallback到项目根目录
+_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_workspace = os.getenv("COZE_WORKSPACE_PATH", _project_root)
+USERS_FILE = os.path.join(_workspace, "data/users.json")
+ORGANIZATIONS_FILE = os.path.join(_workspace, "data/organizations.json")
+STORES_FILE = os.path.join(_workspace, "data/stores.json")
+PRODUCTS_FILE = os.path.join(_workspace, "data/products.json")
+RECORDS_FILE = os.path.join(_workspace, "data/records.json")
 
 
 class UserRole(str):

@@ -59,26 +59,29 @@ def data_aggregation_node(
     category_stats: Dict[str, float] = {}
     product_sales: Dict[str, Dict[str, Any]] = {}
     
-    # 遍历记录进行聚合
+    # 遍历记录进行聚合（匹配records.json格式）
     for record in records:
-        data_type = record.get("data_type", "sale")
-        amount = float(record.get("amount", record.get("total_price", record.get("total_amount", 0))))
+        record_type = record.get("type", record.get("data_type", "revenue"))
+        amount = float(record.get("total_amount", record.get("amount", 0)))
         record_store_id = record.get("store_id", "store_001")
         store_name = record.get("store_name", "默认门店")
         category = record.get("category", "其他")
-        product_name = record.get("product_name", record.get("name", category))
-        
-        if data_type == "sale":
+
+        # 只统计已审核的记录
+        if record.get("status") and record.get("status") != "approved":
+            continue
+
+        if record_type == "revenue":
             total_revenue += amount
-        elif data_type == "cost" or data_type == "purchase":
+        elif record_type == "purchase":
             total_cost += amount
-        elif data_type == "return" or data_type == "refund":
+        elif record_type == "return":
             total_returns += amount
-        else:
+        elif record_type == "expense":
             total_expense += amount
-        
+
         transaction_count += 1
-        
+
         # 门店统计
         if record_store_id not in store_stats:
             store_stats[record_store_id] = {
@@ -87,25 +90,31 @@ def data_aggregation_node(
                 "cost": 0.0,
                 "count": 0
             }
-        if data_type == "sale":
+        if record_type == "revenue":
             store_stats[record_store_id]["revenue"] += amount
-        elif data_type == "cost":
+            store_stats[record_store_id]["count"] += 1
+        elif record_type == "purchase":
             store_stats[record_store_id]["cost"] += amount
-        store_stats[record_store_id]["count"] += 1
-        
-        # 品类统计
-        category_stats[category] = category_stats.get(category, 0.0) + amount
-        
-        # 商品销售统计
-        if product_name not in product_sales:
-            product_sales[product_name] = {
-                "name": product_name,
-                "category": category,
-                "total_sales": 0.0,
-                "quantity": 0
-            }
-        product_sales[product_name]["total_sales"] += amount
-        product_sales[product_name]["quantity"] += record.get("quantity", 1)
+
+        # 品类统计（只统计营收）
+        if record_type == "revenue":
+            category_stats[category] = category_stats.get(category, 0.0) + amount
+
+        # 商品销售统计（从items数组中提取）
+        for item in record.get("items", []):
+            item_name = item.get("name", "")
+            if not item_name:
+                continue
+            if item_name not in product_sales:
+                product_sales[item_name] = {
+                    "name": item_name,
+                    "category": category,
+                    "total_sales": 0.0,
+                    "quantity": 0
+                }
+            item_amount = float(item.get("amount", item.get("price", 0)) * item.get("quantity", 1))
+            product_sales[item_name]["total_sales"] += item_amount
+            product_sales[item_name]["quantity"] += int(item.get("quantity", 1))
     
     # 固定费用计算
     period_ratio = period_days / 30.0  # 按月计算

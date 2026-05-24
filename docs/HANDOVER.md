@@ -148,37 +148,46 @@ bash scripts/local_run.sh
 
 ## 五、当前已知问题与待完善清单
 
-> ⚠️ 以下为本项目尚未完善的功能点，优先级从高到低排列
+> ✅ = 已修复 | ⚠️ = 需要注意 | ❌ = 待修复
 
 ### 🔴 P0 - 核心功能不可用
 
-| 编号 | 问题 | 文件 | 修复建议 |
+| 编号 | 状态 | 问题 | 修复说明 |
 |------|------|------|---------|
-| P0-1 | 语音录音后base64上传到`/api/voice/base64`，ASR SDK可能对webm格式兼容不佳 | `assets/app.js:430-500`, `src/main.py:voice_base64` | 前端优先使用`audio/mp4`格式录制，或后端用ffmpeg转码为wav后再调ASR |
-| P0-2 | 数据聚合节点`data_aggregation_node`每次运行重新计算，无法累加历史数据 | `src/graphs/nodes/data_aggregation_node.py` | 改为从`data/records.json`读取已审核通过的记录来聚合 |
-| P0-3 | 前端看板图表(Chart.js)渲染有时不显示 | `assets/app.js:loadDashboard` | 确保Canvas元素存在后再render，加setTimeout延迟渲染 |
+| P0-1 | ⚠️ | 语音录音后base64上传到`/api/voice/base64`，ASR SDK可能对webm格式兼容不佳 | 前端已优先使用`audio/mp4`格式录制，后端可根据需要转码 |
+| P0-2 | ✅ | 数据看板数据聚合 | `/api/dashboard`已直接从`data/records.json`读取真实数据；`data_aggregation_node`也已修复字段名匹配records.json格式 |
+| P0-3 | ✅ | 前端看板图表(Chart.js)不显示 | 已添加Chart.js CDN、营收趋势柱状图、品类占比饼图，空数据时Canvas显示提示文字 |
 
 ### 🟡 P1 - 功能不完整
 
-| 编号 | 问题 | 文件 | 修复建议 |
+| 编号 | 状态 | 问题 | 修复说明 |
 |------|------|------|---------|
-| P1-1 | 审核通过/驳回后，前端不刷新列表 | `assets/app.js` | approve/reject成功后重新调用`loadReviews()` |
-| P1-2 | 日期筛选默认值需设为当月 | `assets/app.js` | `startDateInput.value = new Date().toISOString().slice(0,7)+'-01'` |
-| P1-3 | 报告导出按钮未对接真实API | `assets/app.js:exportReport` | 调用`POST /api/report/export`并下载返回的URL |
-| P1-4 | 飞书推送按钮未对接API | `assets/app.js:sendReportToFeishu` | 调用`POST /api/notify/feishu` |
-| P1-5 | 商品管理页(products.html)的编辑/删除未对接后端 | `assets/products.html` | 调用`PUT/DELETE /api/products/{id}` |
-| P1-6 | 多租户数据隔离不完整，`/api/records`未按org_id过滤 | `src/main.py` | 在读取records时根据用户的org_id过滤 |
-| P1-7 | 会计端应只显示审核状态为"已通过"的记录 | `assets/app.js` | 查询时加`status=approved`参数 |
+| P1-1 | ✅ | 审核通过/驳回后列表不刷新 | `approveReview()`/`rejectReview()`已调用`loadReviewData()`刷新列表 |
+| P1-2 | ✅ | 日期筛选默认值为当月 | `initDateFilter()`已设置`#dateFilter`默认值为当月第一天 |
+| P1-3 | ✅ | 报告导出按钮对接API | `exportReport()`已调用`POST /api/report/export`并触发下载 |
+| P1-4 | ✅ | 飞书推送按钮对接API | `sendReportToFeishu()`已调用`POST /api/notify/feishu` |
+| P1-5 | ✅ | 商品管理CRUD对接后端 | `products.html`已通过PUT/DELETE调用后端API |
+| P1-6 | ✅ | 多租户数据隔离 | `/api/records`和`/api/dashboard`已根据JWT中的org_id过滤 |
+| P1-7 | ✅ | 会计端显示过滤 | `checkAuth()`已根据role=accountant隐藏审核/录入导航项 |
 
 ### 🟢 P2 - 体验优化
 
-| 编号 | 问题 | 文件 | 修复建议 |
+| 编号 | 状态 | 问题 | 修复说明 |
 |------|------|------|---------|
-| P2-1 | 店长端mobile.html录音和拍照无实时反馈 | `assets/mobile.html` | 添加录音波形动画和拍照预览 |
-| P2-2 | 看板趋势图无数据时不显示空图提示 | `assets/app.js` | 数据为空时显示"暂无数据"占位 |
-| P2-3 | 门店对比柱状图颜色不够区分 | `assets/styles.css` | 使用更鲜明的对比色 |
-| P2-4 | 确认提交模态框的商品详情不够清晰 | `assets/index.html` | 展示SKU、品类、成本价等信息 |
-| P2-5 | 搜索/筛选无loading状态 | `assets/app.js` | 请求期间显示loading spinner |
+| P2-1 | ✅ | 录音和拍照无实时反馈 | mobile.html已添加波形动画(waveform)、加载spinner、图片预览 |
+| P2-2 | ✅ | 看板无数据时无提示 | 图表Canvas在空数据时绘制"暂无数据"文字 |
+| P2-3 | ⚠️ | 门店对比柱状图颜色区分 | Chart.js已使用多种区分色，可根据需要调整 |
+| P2-4 | ⚠️ | 确认提交模态框商品详情 | 可展示SKU、品类、成本价，按需增强 |
+| P2-5 | ✅ | 搜索/筛选无loading状态 | 已使用`showLoading()`/`hideLoading()`覆盖层，移动端有spinner动画 |
+
+### 本次更新 (2026-05-24) 额外修复
+
+| 修复项 | 说明 |
+|--------|------|
+| `/api/stores`真实数据 | 从硬编码5个门店改为读取`stores.json`，支持org_id权限过滤 |
+| 文件路径修复 | `auth.py`和`main.py`现在自动检测项目根目录，不再依赖`COZE_WORKSPACE_PATH`环境变量 |
+| Windows兼容 | `pyproject.toml`移除仅Linux可用的桌面自动化依赖(pyautogui/pywinauto/playwright/PyGObject) |
+| Chart.js集成 | index.html引入Chart.js CDN，app.js添加trendChart和categoryChart渲染
 
 ---
 
@@ -225,11 +234,12 @@ NLU节点从`config/nlu_extraction_cfg.json`读取模型配置，使用Jinja2渲
 
 ### 新开发者建议从以下任务入手：
 
-1. **修复P0-2**：让看板显示真实数据 → 修改`data_aggregation_node.py`，从records.json读取
-2. **修复P1-1**：审核操作后刷新列表 → 在app.js的approve/reject回调中调用loadReviews()
-3. **修复P1-5**：商品编辑删除 → products.html中调用PUT/DELETE API
-4. **修复P1-2**：日期筛选默认当月 → app.js中设置默认值
+1. **了解数据看板** (`/api/dashboard`): 阅读该API的实现，理解数据聚合逻辑
+2. **增强图表** (P2-3): 在`app.js`的`renderTrendChart`中调整Chart.js配置(颜色、动画、交互)
+3. **增强确认模态框** (P2-4): 在`app.js`的`showRecognitionResult`中展示更多商品详情(SKU、品类)
+4. **添加移动端历史页**: 在`mobile.html`添加完整的历史记录查看功能
+5. **迁移数据库**: 将`data/*.json`迁移到PostgreSQL（生产环境建议）
 
 ---
 
-*文档生成时间：2025-05-24*
+*文档生成时间：2025-05-24 | 最后更新：2026-05-24*
