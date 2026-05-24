@@ -1089,7 +1089,28 @@
       "status": "pending",
       "operator": "店长王芳",
       "created_at": "2026-05-24 18:30:00"
+    },
+    {
+      "org_id": "org_default",
+      "store_id": "store_001",
+      "store_name": "",
+      "type": "revenue",
+      "category": "",
+      "items": [
+        {
+          "name": "红色连衣裙",
+          "quantity": 1,
+          "price": 299
+        }
+      ],
+      "total_amount": 299.0,
+      "payment_method": "wechat",
+      "confidence": 0.8,
+      "status": "pending",
+      "operator": "",
+      "created_at": "2026-05-24 22:08:06",
+      "id": "rec_049"
     }
   ],
-  "next_id": 49
+  "next_id": 50
 }

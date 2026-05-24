@@ -262,6 +262,149 @@ if os.path.exists(_static_dir):
 # OpenAI 兼容接口处理器
 openai_handler = OpenAIChatHandler(service)
 
+# ==================== 统一数据访问层（优先数据库，fallback JSON） ====================
+
+def _fetch_records(request: Request, store_id: str = None, record_type: str = None,
+                   start_date: str = None, end_date: str = None) -> list:
+    """统一获取记录 - 优先从Supabase数据库，fallback到JSON文件"""
+    from utils.auth import decode_token, USE_DB, _load_json_file, RECORDS_FILE
+    
+    # 解析用户权限
+    auth_header = request.headers.get("Authorization", "")
+    org_id = "org_default"
+    user_role = "owner"
+    user_store_ids = None
+    
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        payload = decode_token(token)
+        if payload:
+            org_id = payload.get("org_id", org_id)
+            user_role = payload.get("role", user_role)
+            user_store_ids = payload.get("store_ids")
+    
+    # 优先从数据库获取
+    if USE_DB:
+        try:
+            from utils.supabase_client import get_supabase_client
+            client = get_supabase_client()
+            query = client.table("records").select("*").eq("org_id", org_id)
+            
+            # 店长只看自己的门店
+            if user_role == "manager" and user_store_ids:
+                query = query.in_("store_id", user_store_ids)
+            
+            # 门店筛选
+            if store_id and store_id != "all":
+                query = query.eq("store_id", store_id)
+            
+            # 类型筛选
+            if record_type and record_type != "all":
+                type_map = {"sale": "revenue", "expense": "expense", "return": "return", "purchase": "purchase"}
+                actual_type = type_map.get(record_type, record_type)
+                query = query.eq("type", actual_type)
+            
+            # 日期筛选
+            if start_date:
+                query = query.gte("created_at", start_date)
+            if end_date:
+                query = query.lte("created_at", end_date + " 23:59:59")
+            
+            result = query.order("created_at", desc=True).limit(10000).execute()
+            records = result.data or []
+            logger.info(f"从数据库获取{len(records)}条记录")
+            return records
+        except Exception as e:
+            logger.warning(f"数据库查询记录失败，fallback到JSON: {e}")
+    
+    # Fallback: JSON文件
+    record_data = _load_json_file(RECORDS_FILE)
+    records = record_data.get("records", [])
+    
+    # 按组织过滤
+    records = [r for r in records if r.get("org_id") == org_id]
+    
+    # 店长只能看自己门店
+    if user_role == "manager" and user_store_ids:
+        records = [r for r in records if r.get("store_id") in user_store_ids]
+    
+    # 门店筛选
+    if store_id and store_id != "all":
+        records = [r for r in records if r.get("store_id") == store_id]
+    
+    # 类型筛选
+    if record_type and record_type != "all":
+        type_map = {"sale": "revenue", "expense": "expense", "return": "return", "purchase": "purchase"}
+        actual_type = type_map.get(record_type, record_type)
+        records = [r for r in records if r.get("type") == actual_type]
+    
+    # 日期筛选
+    if start_date:
+        records = [r for r in records if r.get("created_at", "") >= start_date]
+    if end_date:
+        records = [r for r in records if r.get("created_at", "") <= end_date + " 23:59:59"]
+    
+    return records
+
+
+def _save_record(record: dict) -> dict:
+    """统一保存记录 - 优先写入Supabase数据库，fallback到JSON文件"""
+    from utils.auth import USE_DB, _load_json_file, _save_json_file, RECORDS_FILE
+    import secrets
+    
+    if USE_DB:
+        try:
+            from utils.supabase_client import get_supabase_client
+            client = get_supabase_client()
+            # items转JSON字符串
+            db_record = dict(record)
+            if isinstance(db_record.get("items"), list):
+                db_record["items"] = json.dumps(db_record["items"], ensure_ascii=False)
+            result = client.table("records").insert(db_record).execute()
+            return result.data[0] if result.data else record
+        except Exception as e:
+            logger.warning(f"数据库保存记录失败，fallback到JSON: {e}")
+    
+    # Fallback: JSON文件
+    record_data = _load_json_file(RECORDS_FILE)
+    records = record_data.get("records", [])
+    next_id = record_data.get("next_id", 1)
+    if "id" not in record or not record["id"]:
+        record["id"] = f"rec_{next_id:03d}"
+        record_data["next_id"] = next_id + 1
+    records.append(record)
+    record_data["records"] = records
+    _save_json_file(RECORDS_FILE, record_data)
+    return record
+
+
+def _update_record(record_id: str, updates: dict) -> dict:
+    """统一更新记录"""
+    from utils.auth import USE_DB, _load_json_file, _save_json_file, RECORDS_FILE
+    
+    if USE_DB:
+        try:
+            from utils.supabase_client import get_supabase_client
+            client = get_supabase_client()
+            db_updates = dict(updates)
+            if isinstance(db_updates.get("items"), list):
+                db_updates["items"] = json.dumps(db_updates["items"], ensure_ascii=False)
+            result = client.table("records").update(db_updates).eq("id", record_id).execute()
+            return result.data[0] if result.data else updates
+        except Exception as e:
+            logger.warning(f"数据库更新记录失败，fallback到JSON: {e}")
+    
+    # Fallback: JSON文件
+    record_data = _load_json_file(RECORDS_FILE)
+    records = record_data.get("records", [])
+    for r in records:
+        if r.get("id") == record_id:
+            r.update(updates)
+            _save_json_file(RECORDS_FILE, record_data)
+            return r
+    return {}
+
+
 # ==================== 鉴权工具函数 ====================
 
 def get_current_user(request: Request):
@@ -308,9 +451,9 @@ async def web_ui():
 
 @app.get("/api/stores")
 async def get_stores(request: Request):
-    """获取门店列表（从stores.json读取真实数据）"""
-    from utils.auth import get_stores_by_org, decode_token
-
+    """获取门店列表（优先从数据库，fallback JSON）"""
+    from utils.auth import decode_token, USE_DB, _load_json_file, STORES_FILE
+    
     org_id = "org_default"
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
@@ -318,9 +461,18 @@ async def get_stores(request: Request):
         payload = decode_token(token)
         if payload:
             org_id = payload.get("org_id", org_id)
-
-    all_stores = get_stores_by_org(org_id)
-    stores = [{"id": s.store_id, "store_id": s.store_id, "name": s.name, "address": s.address} for s in all_stores]
+    
+    if USE_DB:
+        try:
+            from utils.db import get_stores_by_org_db
+            stores = get_stores_by_org_db(org_id)
+            return {"success": True, "stores": stores}
+        except Exception as e:
+            logger.warning(f"数据库查询门店失败: {e}")
+    
+    # Fallback JSON
+    store_data = _load_json_file(STORES_FILE)
+    stores = store_data.get("stores", [])
     return {"success": True, "stores": stores}
 
 @app.post("/api/query")
@@ -494,48 +646,8 @@ async def get_records(
     page_size: int = 20
 ):
     """获取历史记录（真实数据）"""
-    from utils.auth import _load_json_file, RECORDS_FILE, decode_token
-    
     try:
-        record_data = _load_json_file(RECORDS_FILE)
-        records = record_data.get("records", [])
-        
-        # 权限过滤
-        auth_header = request.headers.get("Authorization", "")
-        org_id = "org_default"
-        user_role = "owner"
-        user_store_ids = None
-        
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
-            payload = decode_token(token)
-            if payload:
-                org_id = payload.get("org_id", org_id)
-                user_role = payload.get("role", user_role)
-                user_store_ids = payload.get("store_ids")
-        
-        # 按组织过滤
-        records = [r for r in records if r.get("org_id") == org_id]
-        
-        # 店长只能看自己门店
-        if user_role == "manager" and user_store_ids:
-            records = [r for r in records if r.get("store_id") in user_store_ids]
-        
-        # 门店筛选
-        if store_id and store_id != "all":
-            records = [r for r in records if r.get("store_id") == store_id]
-        
-        # 类型筛选
-        if record_type and record_type != "all":
-            type_map = {"sale": "revenue", "expense": "expense", "return": "return", "purchase": "purchase"}
-            actual_type = type_map.get(record_type, record_type)
-            records = [r for r in records if r.get("type") == actual_type]
-        
-        # 日期筛选
-        if start_date:
-            records = [r for r in records if r.get("created_at", "") >= start_date]
-        if end_date:
-            records = [r for r in records if r.get("created_at", "") <= end_date + " 23:59:59"]
+        records = _fetch_records(request, store_id, record_type, start_date, end_date)
         
         # 按时间倒序
         records.sort(key=lambda x: x.get("created_at", ""), reverse=True)
@@ -565,17 +677,11 @@ async def create_record(request: Request):
     if not user:
         return {"success": False, "error": "未登录，请先登录"}
     
-    from utils.auth import _load_json_file, _save_json_file, RECORDS_FILE
-    
     try:
         data = await request.json()
-        record_data = _load_json_file(RECORDS_FILE)
-        records = record_data.get("records", [])
-        next_id = record_data.get("next_id", 1)
         
         # 构建新记录
         new_record = {
-            "id": f"rec_{next_id:03d}",
             "org_id": data.get("org_id", "org_default"),
             "store_id": data.get("store_id", ""),
             "store_name": data.get("store_name", ""),
@@ -590,12 +696,8 @@ async def create_record(request: Request):
             "created_at": data.get("created_at", time.strftime("%Y-%m-%d %H:%M:%S"))
         }
         
-        records.append(new_record)
-        record_data["records"] = records
-        record_data["next_id"] = next_id + 1
-        _save_json_file(RECORDS_FILE, record_data)
-        
-        return {"success": True, "record": new_record}
+        saved = _save_record(new_record)
+        return {"success": True, "record": saved}
     except Exception as e:
         logger.error(f"创建记录失败: {e}")
         return {"success": False, "message": str(e)}
@@ -607,18 +709,10 @@ async def approve_record(record_id: str, request: Request):
     if not user:
         return {"success": False, "error": "无权限，仅老板可审核"}
     """审核通过记录"""
-    from utils.auth import _load_json_file, _save_json_file, RECORDS_FILE
-    
     try:
-        record_data = _load_json_file(RECORDS_FILE)
-        records = record_data.get("records", [])
-        
-        for r in records:
-            if r.get("id") == record_id:
-                r["status"] = "approved"
-                _save_json_file(RECORDS_FILE, record_data)
-                return {"success": True, "record": r}
-        
+        updated = _update_record(record_id, {"status": "approved"})
+        if updated:
+            return {"success": True, "record": updated}
         return {"success": False, "message": "记录不存在"}
     except Exception as e:
         logger.error(f"审核通过失败: {e}")
@@ -631,18 +725,10 @@ async def reject_record(record_id: str, request: Request):
     if not user:
         return {"success": False, "error": "无权限，仅老板可审核"}
     
-    from utils.auth import _load_json_file, _save_json_file, RECORDS_FILE
-    
     try:
-        record_data = _load_json_file(RECORDS_FILE)
-        records = record_data.get("records", [])
-        
-        for r in records:
-            if r.get("id") == record_id:
-                r["status"] = "rejected"
-                _save_json_file(RECORDS_FILE, record_data)
-                return {"success": True, "record": r}
-        
+        updated = _update_record(record_id, {"status": "rejected"})
+        if updated:
+            return {"success": True, "record": updated}
         return {"success": False, "message": "记录不存在"}
     except Exception as e:
         logger.error(f"审核驳回失败: {e}")
@@ -651,23 +737,17 @@ async def reject_record(record_id: str, request: Request):
 @app.put("/api/records/{record_id}")
 async def update_record(record_id: str, request: Request):
     """编辑记录"""
-    from utils.auth import _load_json_file, _save_json_file, RECORDS_FILE
-    
     try:
         data = await request.json()
-        record_data = _load_json_file(RECORDS_FILE)
-        records = record_data.get("records", [])
+        updates = {}
+        for key in ["items", "total_amount", "category", "payment_method", "type"]:
+            if key in data:
+                updates[key] = data[key]
+        updates["status"] = "pending"  # 编辑后重新待审核
         
-        for r in records:
-            if r.get("id") == record_id:
-                # 只更新允许修改的字段
-                for key in ["items", "total_amount", "category", "payment_method", "type"]:
-                    if key in data:
-                        r[key] = data[key]
-                r["status"] = "pending"  # 编辑后重新待审核
-                _save_json_file(RECORDS_FILE, record_data)
-                return {"success": True, "record": r}
-        
+        updated = _update_record(record_id, updates)
+        if updated:
+            return {"success": True, "record": updated}
         return {"success": False, "message": "记录不存在"}
     except Exception as e:
         logger.error(f"编辑记录失败: {e}")
@@ -682,39 +762,15 @@ async def get_dashboard_data(
     end_date: str = ""
 ):
     """获取看板数据（真实统计）"""
-    from utils.auth import _load_json_file, RECORDS_FILE, decode_token
     import datetime
     
     try:
-        record_data = _load_json_file(RECORDS_FILE)
-        records = record_data.get("records", [])
+        # 使用统一数据访问层
+        records = _fetch_records(request, store_id=store_id if store_id != "all" else None,
+                                 start_date=start_date if start_date else None,
+                                 end_date=end_date if end_date else None)
         
-        # 权限过滤
-        auth_header = request.headers.get("Authorization", "")
-        org_id = "org_default"
-        user_role = "owner"
-        user_store_ids = None
-        
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
-            payload = decode_token(token)
-            if payload:
-                org_id = payload.get("org_id", org_id)
-                user_role = payload.get("role", user_role)
-                user_store_ids = payload.get("store_ids")
-        
-        # 过滤组织
-        records = [r for r in records if r.get("org_id") == org_id]
-        
-        # 店长只看自己的门店
-        if user_role == "manager" and user_store_ids:
-            records = [r for r in records if r.get("store_id") in user_store_ids]
-        
-        # 门店筛选
-        if store_id and store_id != "all":
-            records = [r for r in records if r.get("store_id") == store_id]
-        
-        # 日期过滤：支持自定义start_date/end_date和period两种模式
+        # 日期过滤
         if start_date and end_date:
             # 自定义日期范围
             sd = datetime.datetime.strptime(start_date, "%Y-%m-%d")
@@ -893,30 +949,21 @@ async def get_dashboard_data(
 @app.get("/api/reviews")
 async def get_reviews(request: Request):
     """获取待审核记录"""
-    from utils.auth import _load_json_file, RECORDS_FILE, decode_token
-    
     try:
-        record_data = _load_json_file(RECORDS_FILE)
-        records = record_data.get("records", [])
+        all_records = _fetch_records(request)
         
-        # 权限过滤
+        # 解析用户角色
+        from utils.auth import decode_token
         auth_header = request.headers.get("Authorization", "")
-        org_id = "org_default"
         user_role = "owner"
-        
         if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
-            payload = decode_token(token)
+            payload = decode_token(auth_header[7:])
             if payload:
-                org_id = payload.get("org_id", org_id)
                 user_role = payload.get("role", user_role)
         
-        # 只返回待审核记录
-        pending = [r for r in records if r.get("status") == "pending" and r.get("org_id") == org_id]
-        approved_count = len([r for r in records if r.get("status") == "approved" and r.get("org_id") == org_id])
-        rejected_count = len([r for r in records if r.get("status") == "rejected" and r.get("org_id") == org_id])
-        
-        # 会计不能审核
+        pending = [r for r in all_records if r.get("status") == "pending"]
+        approved_count = len([r for r in all_records if r.get("status") == "approved"])
+        rejected_count = len([r for r in all_records if r.get("status") == "rejected"])
         can_review = user_role in ("owner", "manager")
         
         pending.sort(key=lambda x: x.get("created_at", ""), reverse=True)
@@ -1019,11 +1066,11 @@ async def api_logout():
 
 @app.get("/api/products")
 async def get_products(request: Request):
-    """获取商品列表"""
-    from utils.auth import get_products_by_org, decode_token
+    """获取商品列表（优先从数据库，fallback JSON）"""
+    from utils.auth import decode_token, USE_DB, get_products_by_org
     
     auth_header = request.headers.get("Authorization", "")
-    org_id = "org_default"  # 默认组织
+    org_id = "org_default"
     
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
@@ -1031,13 +1078,17 @@ async def get_products(request: Request):
         if payload:
             org_id = payload.get("org_id", org_id)
     
-    products = get_products_by_org(org_id)
+    if USE_DB:
+        try:
+            from utils.db import get_products as db_get_products
+            products = db_get_products(org_id=org_id)
+            return {"success": True, "products": products, "total": len(products)}
+        except Exception as e:
+            logger.warning(f"数据库查询商品失败: {e}")
     
-    return {
-        "success": True,
-        "products": [p.model_dump() for p in products],
-        "total": len(products)
-    }
+    # Fallback JSON
+    products = get_products_by_org(org_id)
+    return {"success": True, "products": [p.model_dump() for p in products], "total": len(products)}
 
 @app.post("/api/products")
 async def create_product_api(request: Request):
