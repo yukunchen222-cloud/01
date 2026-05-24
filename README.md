@@ -1,119 +1,101 @@
-# AI短剧推广自动剪辑工作流
+# 服装连锁AI记账助手
 
-一个基于多Agent协作的AI短剧推广自动剪辑系统，能够自动分析素材、搜索爆款、生成剪辑策略并执行剪辑。
+基于多Agent协作的服装连锁店智能记账系统，支持语音报账、拍照录入、数据看板、异常预警、报告导出。
 
-## 🎯 核心功能
+## 核心功能
 
-### 爆款Agent
-- 📹 **素材分析**: 提取关键帧、字幕、内容理解
-- 🔍 **爆款搜索**: 搜索抖音/快手同类爆款视频
-- 📊 **爆款分析**: 分析钩子点、标题模式、封面设计
-- 📝 **策略生成**: 生成详细剪辑策略文档
-- ✅ **审核比对**: 对比成品与爆款标准
+### 🎤 语音报账（店长端）
+- 语音识别(ASR) → NLU意图提取 → 自动归类（销售/进货/退货/支出/盘点）
+- 商品知识库增强，自动匹配SKU和成本价
 
-### 剪辑Agent
-- 🔧 **策略解析**: 解析JSON剪辑策略为可执行操作
-- 📁 **素材加载**: 从素材库自动加载视频
-- ✂️ **剪辑执行**: 使用FFmpeg执行剪辑操作
-- 📦 **成品输出**: 输出到成品库，生成元数据
-- 🔄 **返工机制**: 自动错误记录与优化
+### 📷 拍照录入
+- 支持JPG/PNG图片OCR识别
+- 支持PDF文件文本提取
+- 多模态LLM提取结构化数据
 
-## 🚀 快速开始
+### 📊 数据看板（老板端）
+- 营收/成本/毛利/净利润实时统计
+- 门店对比、品类分布、日趋势图表
+- 日期筛选（日/周/月/自定义）
 
-### 1. 创建本地文件夹
+### ⚠️ 异常预警
+- 毛利率异常检测
+- 营收偏离预警
+- LLM语义分析生成洞察建议
 
-在您的电脑桌面创建两个文件夹：
+### 📋 审核中心
+- 低置信度记录自动标记待审核
+- 老板审核通过/驳回
+- 审核状态追踪
 
-```
-桌面/
-├── 素材库/    ← 放入原始视频
-└── 成品库/    ← 剪辑完成的视频
-```
+### 📄 报告导出
+- 支持PDF/Word/Excel多格式导出
+- 飞书消息推送（日报/预警）
+- 邮件报告发送
 
-### 2. 配置路径
+## 用户角色
 
-编辑 `config/workflow_config.yaml`：
-
-```yaml
-MATERIAL_LIBRARY: "C:/Users/您的用户名/Desktop/素材库"
-OUTPUT_LIBRARY: "C:/Users/您的用户名/Desktop/成品库"
-```
-
-### 3. 安装FFmpeg
-
-**Windows**: 下载 https://ffmpeg.org/download.html 并添加到PATH
-
-**Mac**: 
-```bash
-brew install ffmpeg
-```
-
-### 4. 运行工作流
-
-```bash
-python run_workflow.py
-```
-
-按提示操作即可！
-
-## 📁 项目结构
-
-```
-├── config/                    # 配置文件
-│   ├── workflow_config.yaml   # 路径配置
-│   └── *_llm_cfg.json        # 模型配置
-├── src/
-│   ├── graphs/
-│   │   ├── graph.py          # 爆款Agent工作流
-│   │   ├── edit_graph.py     # 剪辑Agent工作流
-│   │   ├── state.py          # 状态定义
-│   │   └── nodes/            # 节点实现
-│   └── main.py               # 主入口
-├── run_workflow.py           # 启动脚本
-├── USAGE.md                  # 详细使用指南
-└── AGENTS.md                 # 技术文档
-```
-
-## 🔧 支持的剪辑操作
-
-| 操作 | 说明 |
+| 角色 | 权限 |
 |------|------|
-| 剪切 | 按时间戳裁剪视频片段 |
-| 慢动作 | 0.5x / 0.25x 慢放 |
-| 快进 | 1.5x / 2x 加速 |
-| 震动 | 画面震动特效 |
-| 渐变 | 淡入淡出 |
-| 缩放 | 画面缩放效果 |
+| 老板(owner) | 全部功能 + 审核 + 全店数据 |
+| 店长(manager) | 单店数据 + 语音/拍照录入 |
+| 会计(accountant) | 查看数据 + 报告导出 |
 
-## ⚙️ 技术栈
+## 快速开始
 
-- **LangGraph**: 工作流编排框架
-- **DeepSeek-V3**: 核心推理模型
-- **Doubao-Seed**: 多模态视频理解
-- **FFmpeg**: 视频处理
-- **Web搜索SDK**: 爆款数据爬取
+```bash
+# 安装依赖
+uv sync
 
-## 📋 使用流程
-
-```
-1. 放入素材 → 素材库文件夹
-2. 运行爆款Agent → 获取剪辑策略
-3. 确认策略 → 人工审核
-4. 运行剪辑Agent → 执行剪辑
-5. 查看成品 → 成品库文件夹
+# 启动服务
+uvicorn src.main:app --host 0.0.0.0 --port 5000 --reload
 ```
 
-## 📖 详细文档
+## 测试账号
 
-- [使用指南](USAGE.md) - 详细操作说明
-- [技术文档](AGENTS.md) - 节点和配置详情
+| 用户名 | 密码 | 角色 |
+|--------|------|------|
+| boss | 123456 | 老板 |
+| manager1 | 123456 | 店长 |
+| accountant | 123456 | 会计 |
 
-## 🔜 后续开发
+## 技术栈
 
-- [ ] 投放Agent: 自动发布到抖音
-- [ ] 剪映桌面版集成
-- [ ] 定时发布功能
+- **后端**: FastAPI + LangGraph 1.0
+- **AI**: 豆包大模型(NLU/异常检测) + ASR语音识别 + 多模态OCR
+- **前端**: 原生HTML/CSS/JS + Chart.js
+- **数据**: JSON文件存储（MVP阶段）
+- **鉴权**: JWT Token
 
----
+## 项目结构
 
-**注意**: 运行前请确保已配置好DeepSeek API密钥
+```
+src/
+├── main.py              # FastAPI主应用 + API路由
+├── graphs/
+│   ├── graph.py         # 工作流编排（DAG）
+│   ├── state.py         # 状态定义
+│   └── nodes/           # 工作流节点
+│       ├── asr_recognition_node.py
+│       ├── ocr_recognition_node.py
+│       ├── nlu_extraction_node.py
+│       ├── data_validation_node.py
+│       ├── data_aggregation_node.py
+│       ├── anomaly_detection_node.py
+│       └── report_generation_node.py
+├── utils/
+│   ├── auth.py          # JWT鉴权
+│   ├── feishu_notify.py # 飞书推送
+│   └── product_knowledge.py # 商品知识库
+├── tools/               # 工具定义
+└── storage/             # 存储层
+assets/
+├── index.html           # 老板端（PC）
+├── mobile.html          # 店长端（移动）
+├── login.html           # 登录页
+├── products.html        # 商品管理
+├── app.js               # 前端逻辑
+└── styles.css           # 样式
+config/                  # LLM配置
+data/                    # 数据存储（JSON）
+```

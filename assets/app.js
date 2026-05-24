@@ -178,7 +178,7 @@ function renderDashboard(data) {
 
     // 渲染图表（延迟渲染确保Canvas存在）
     setTimeout(() => {
-        renderTrendChart(summary, data.dashboard_data?.store_stats || {});
+        renderTrendChart(data.dashboard_data?.trend_data || [], data.dashboard_data?.store_stats || {});
         renderCategoryPieChart(data.dashboard_data?.category_stats || {});
     }, 200);
 
@@ -195,7 +195,7 @@ let trendChartInstance = null;
 let categoryChartInstance = null;
 
 // 渲染营收趋势图
-function renderTrendChart(summary, storeStats) {
+function renderTrendChart(trendData, storeStats) {
     const canvas = document.getElementById('trendChart');
     if (!canvas) return;
 
@@ -205,6 +205,61 @@ function renderTrendChart(summary, storeStats) {
     }
 
     const ctx = canvas.getContext('2d');
+
+    // 优先使用日趋势数据
+    if (trendData && trendData.length > 0) {
+        const labels = trendData.map(d => d.date.substring(5));  // MM-DD
+        const revenues = trendData.map(d => d.revenue || 0);
+        const costs = trendData.map(d => d.cost || 0);
+        const profits = trendData.map(d => d.profit || 0);
+
+        trendChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: '营收',
+                        data: revenues,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    },
+                    {
+                        label: '成本',
+                        data: costs,
+                        borderColor: '#fa709a',
+                        backgroundColor: 'rgba(250, 112, 154, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    },
+                    {
+                        label: '利润',
+                        data: profits,
+                        borderColor: '#43e97b',
+                        backgroundColor: 'rgba(67, 233, 123, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#ccc' } }
+                },
+                scales: {
+                    x: { ticks: { color: '#999' }, grid: { display: false } },
+                    y: { ticks: { color: '#999', callback: v => v >= 10000 ? (v/10000).toFixed(1)+'万' : v }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                }
+            }
+        });
+        return;
+    }
+
+    // 回退：使用门店对比柱状图
     const stores = Object.entries(storeStats || {});
     const hasData = stores.length > 0 && stores.some(([_, s]) => (s.revenue || 0) > 0);
 
@@ -213,7 +268,7 @@ function renderTrendChart(summary, storeStats) {
         ctx.fillStyle = '#999';
         ctx.font = '14px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('暂无门店营收数据', canvas.width / 2, canvas.height / 2);
+        ctx.fillText('暂无营收趋势数据', canvas.width / 2, canvas.height / 2);
         return;
     }
 
@@ -270,7 +325,14 @@ function renderCategoryPieChart(categoryStats) {
 
     const ctx = canvas.getContext('2d');
     const entries = Object.entries(categoryStats || {});
-    const total = entries.reduce((sum, [_, v]) => sum + v, 0);
+    // 兼容新旧格式：新格式{revenue:100,...}，旧格式直接是数字
+    const parsed = entries.map(([name, v]) => {
+        if (typeof v === 'object' && v !== null) {
+            return [name, v.revenue || 0];
+        }
+        return [name, v || 0];
+    });
+    const total = parsed.reduce((sum, [_, v]) => sum + v, 0);
 
     if (total === 0) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -286,9 +348,9 @@ function renderCategoryPieChart(categoryStats) {
     categoryChartInstance = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: entries.map(([name, _]) => name),
+            labels: parsed.map(([name, _]) => name),
             datasets: [{
-                data: entries.map(([_, v]) => v),
+                data: parsed.map(([_, v]) => v),
                 backgroundColor: pieColors.slice(0, entries.length),
                 borderWidth: 2,
                 borderColor: '#1a1a2e'
@@ -802,7 +864,7 @@ function processVoiceRecording() {
     reader.onloadend = function() {
         const base64Audio = reader.result.split(',')[1];
         
-        fetch(`${API_BASE}/api/voice/base64`, {
+        authFetch(`${API_BASE}/api/voice/base64`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -892,7 +954,7 @@ function handleImageUpload(file) {
         }
         
         const apiUrl = isPdf ? `${API_BASE}/api/document` : `${API_BASE}/api/image`;
-        return fetch(apiUrl, {
+        return authFetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1044,7 +1106,7 @@ function confirmSubmit() {
 function generateReport(type) {
     showLoading();
     
-    fetch(`${API_BASE}/api/report`, {
+    authFetch(`${API_BASE}/api/report`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type, period: currentPeriod, store_id: currentStore })
@@ -1079,7 +1141,7 @@ function exportReport(format = 'pdf') {
     const alerts = window.dashboardAlerts || [];
     const productAnalysis = window.dashboardProductAnalysis || {};
     
-    fetch(`${API_BASE}/api/report/export`, {
+    authFetch(`${API_BASE}/api/report/export`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1122,7 +1184,7 @@ function sendReportToFeishu() {
     const summaryData = window.dashboardSummary || {};
     const topProducts = window.dashboardProductAnalysis?.top_sellers || [];
     
-    fetch(`${API_BASE}/api/notify/feishu`, {
+    authFetch(`${API_BASE}/api/notify/feishu`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1153,7 +1215,7 @@ function sendAlertToFeishu() {
         return;
     }
     
-    fetch(`${API_BASE}/api/notify/feishu`, {
+    authFetch(`${API_BASE}/api/notify/feishu`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

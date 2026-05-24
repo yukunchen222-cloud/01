@@ -235,7 +235,21 @@ class GraphService:
 
 
 service = GraphService()
-app = FastAPI()
+app = FastAPI(title="服装连锁AI记账助手", version="1.0.0")
+
+# CORS配置 - 限制来源而非全开放
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5000",
+        "http://127.0.0.1:5000",
+        "https://9f450885-7dd8-4e7b-9cde-11d2486de9a8.dev.coze.site",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 挂载静态文件目录
 import os
@@ -247,6 +261,34 @@ if os.path.exists(_static_dir):
 
 # OpenAI 兼容接口处理器
 openai_handler = OpenAIChatHandler(service)
+
+# ==================== 鉴权工具函数 ====================
+
+def get_current_user(request: Request):
+    """从请求头获取当前用户，未登录返回None"""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        # 尝试从cookie获取
+        token = request.cookies.get("token", "")
+    else:
+        token = auth_header[7:]
+    if not token:
+        return None
+    from utils.auth import decode_token, get_user_by_id
+    payload = decode_token(token)
+    if not payload:
+        return None
+    user_id = payload.get("user_id", "")
+    return get_user_by_id(user_id)
+
+
+def require_owner(request: Request):
+    """要求老板权限"""
+    user = get_current_user(request)
+    if not user or user.role != "owner":
+        return None
+    return user
+
 
 # ==================== Web界面路由 ====================
 
@@ -518,7 +560,11 @@ async def get_records(
 
 @app.post("/api/records")
 async def create_record(request: Request):
-    """创建交易记录（确认提交）"""
+    """创建交易记录（确认提交）- 需要登录"""
+    user = get_current_user(request)
+    if not user:
+        return {"success": False, "error": "未登录，请先登录"}
+    
     from utils.auth import _load_json_file, _save_json_file, RECORDS_FILE
     
     try:
@@ -556,6 +602,10 @@ async def create_record(request: Request):
 
 @app.put("/api/records/{record_id}/approve")
 async def approve_record(record_id: str, request: Request):
+    """审核通过 - 仅老板可操作"""
+    user = require_owner(request)
+    if not user:
+        return {"success": False, "error": "无权限，仅老板可审核"}
     """审核通过记录"""
     from utils.auth import _load_json_file, _save_json_file, RECORDS_FILE
     
@@ -576,7 +626,11 @@ async def approve_record(record_id: str, request: Request):
 
 @app.put("/api/records/{record_id}/reject")
 async def reject_record(record_id: str, request: Request):
-    """审核驳回记录"""
+    """审核驳回记录 - 仅老板可操作"""
+    user = require_owner(request)
+    if not user:
+        return {"success": False, "error": "无权限，仅老板可审核"}
+    
     from utils.auth import _load_json_file, _save_json_file, RECORDS_FILE
     
     try:

@@ -78,10 +78,24 @@ def anomaly_detection_node(
                     "value": store_revenue
                 })
     
-    # 3. 使用LLM进行智能分析（如果有足够数据）
-    if len(records) >= 3:
+    # 3. 使用LLM进行智能分析（只要有经营数据就分析）
+    total_revenue = summary.get("total_revenue", 0)
+    safe_records = records or []
+    if total_revenue > 0 or len(safe_records) >= 1:
         try:
             llm_client = LLMClient(ctx=ctx)
+            
+            # 构建门店明细
+            store_detail = ""
+            for sid, stats in store_stats.items():
+                store_detail += f"\n  - {stats.get('store_name', sid)}: 营收¥{stats.get('revenue',0):,.0f} 成本¥{stats.get('cost',0):,.0f}"
+            
+            # 构建品类明细
+            category_detail = ""
+            cat_stats = dashboard_data.get("category_stats", {})
+            for cat, vals in cat_stats.items():
+                if isinstance(vals, dict):
+                    category_detail += f"\n  - {cat}: 营收¥{vals.get('revenue',0):,.0f} 进货¥{vals.get('cost',0):,.0f}"
             
             # 构建分析提示
             analysis_prompt = f"""分析以下经营数据，识别潜在的异常或风险：
@@ -91,12 +105,23 @@ def anomaly_detection_node(
 - 总成本: ¥{summary.get('total_cost', 0):,.2f}
 - 毛利润: ¥{summary.get('gross_profit', 0):,.2f}
 - 毛利率: {summary.get('gross_margin', 0):.1f}%
+- 净利润: ¥{summary.get('net_profit', 0):,.2f}
 - 交易笔数: {summary.get('transaction_count', 0)}
+门店明细：{store_detail or ' 暂无'}
+品类明细：{category_detail or ' 暂无'}
+固定费用：房租¥{summary.get('fixed_expenses',{}).get('rent',0):,.0f} 水电¥{summary.get('fixed_expenses',{}).get('utilities',0):,.0f} 人工¥{summary.get('fixed_expenses',{}).get('salary',0):,.0f}
 
-请识别可能的异常情况，返回JSON格式的预警列表：
-{{"alerts": [{{"type": "异常类型", "level": "warning/critical", "message": "预警信息"}}]}}
+请识别以下方面的异常：
+1. 毛利率异常（过高或过低）
+2. 门店业绩偏离（某门店明显差于其他）
+3. 品类结构异常（某品类占比异常）
+4. 费用异常（固定费用占比过高）
+5. 现金流风险
 
-如果没有明显异常，返回空列表。"""
+返回JSON格式的预警列表：
+{{"alerts": [{{"type": "异常类型英文代码", "level": "warning或critical", "message": "具体预警描述，包含数据"}}]}}
+
+如果没有明显异常，返回空列表。仅返回JSON，不要其他文字。"""
             
             messages = [
                 SystemMessage(content=sp),
