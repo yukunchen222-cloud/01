@@ -1,6 +1,6 @@
 {
     "config": {
-        "model": "doubao-pro-32k",
+        "model": "doubao-seed-2-0-lite-260215",
         "temperature": 0.1,
         "top_p": 0.9,
         "max_completion_tokens": 2000,

@@ -434,7 +434,13 @@ async function toggleRecording() {
     if (!mediaRecorder || mediaRecorder.state === 'inactive') {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
+            // 优先使用webm格式，兼容Safari用mp4
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+                ? 'audio/webm;codecs=opus' 
+                : MediaRecorder.isTypeSupported('audio/mp4') 
+                    ? 'audio/mp4' 
+                    : 'audio/webm';
+            mediaRecorder = new MediaRecorder(stream, { mimeType });
             audioChunks = [];
             
             mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
@@ -456,22 +462,36 @@ async function toggleRecording() {
 }
 
 function processVoiceRecording() {
-    const blob = new Blob(audioChunks, { type: 'audio/webm' });
-    const formData = new FormData();
-    formData.append('audio', blob, 'recording.webm');
-    formData.append('store_id', currentStore);
+    const mimeType = mediaRecorder.mimeType || 'audio/webm';
+    const blob = new Blob(audioChunks, { type: mimeType });
+    const statusEl = document.getElementById('recordStatus');
+    statusEl.textContent = '正在识别语音...';
     
-    fetch(`${API_BASE}/api/voice`, {
-        method: 'POST',
-        body: formData
-    })
-    .then(res => res.json())
-    .then(data => {
-        showRecognitionResult(data);
-    })
-    .catch(err => {
-        document.getElementById('recordStatus').textContent = '识别失败，请重试';
-    });
+    // 将音频转为base64，直接发送给后端ASR识别
+    const reader = new FileReader();
+    reader.onloadend = function() {
+        const base64Audio = reader.result.split(',')[1]; // 去掉 data:audio/webm;base64, 前缀
+        
+        fetch(`${API_BASE}/api/voice/base64`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                audio_base64: base64Audio,
+                audio_format: mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm',
+                store_id: currentStore
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            statusEl.textContent = '识别完成';
+            showRecognitionResult(data);
+        })
+        .catch(err => {
+            statusEl.textContent = '识别失败，请重试';
+            console.error('语音识别错误:', err);
+        });
+    };
+    reader.readAsDataURL(blob);
 }
 
 // 图片上传
@@ -505,27 +525,59 @@ function initImageUpload() {
 
 function handleImageUpload(file) {
     const preview = document.getElementById('imagePreview');
-    preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="预览">`;
+    const fileName = file.name.toLowerCase();
+    const isPdf = fileName.endsWith('.pdf');
+    const isImage = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileName);
+    
+    if (isImage) {
+        preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="预览">`;
+    } else if (isPdf) {
+        preview.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-secondary);"><div style="font-size:48px;">📄</div><p>${file.name}</p><p style="font-size:12px;">PDF文件将提取文字内容进行识别</p></div>`;
+    } else {
+        preview.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-secondary);"><div style="font-size:48px;">📎</div><p>${file.name}</p></div>`;
+    }
     preview.classList.remove('hidden');
     
     const formData = new FormData();
-    formData.append('image', file);
+    formData.append('file', file);
     formData.append('store_id', currentStore);
     
     showLoading();
     
-    fetch(`${API_BASE}/api/image', {
+    // 第一步：上传文件到对象存储
+    fetch(`${API_BASE}/api/upload`, {
         method: 'POST',
         body: formData
     })
     .then(res => res.json())
+    .then(uploadResult => {
+        if (!uploadResult.success) {
+            hideLoading();
+            alert('文件上传失败：' + (uploadResult.error || '未知错误'));
+            return;
+        }
+        
+        // 第二步：根据文件类型调用不同的识别接口
+        const apiUrl = isPdf ? `${API_BASE}/api/document` : `${API_BASE}/api/image`;
+        return fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                file_url: uploadResult.url,
+                store_id: currentStore
+            })
+        });
+    })
+    .then(res => res ? res.json() : null)
     .then(data => {
         hideLoading();
+        if (!data) return;
         showRecognitionResult(data);
     })
     .catch(err => {
         hideLoading();
-        alert('图片识别失败，请重试');
+        alert('识别失败，请重试');
+        console.error('文件识别错误:', err);
     });
 }
 

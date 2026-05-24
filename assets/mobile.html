@@ -630,7 +630,13 @@
         async function startRecording() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
+                // 优先使用webm+opus格式
+                const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+                    ? 'audio/webm;codecs=opus' 
+                    : MediaRecorder.isTypeSupported('audio/mp4') 
+                        ? 'audio/mp4' 
+                        : 'audio/webm';
+                mediaRecorder = new MediaRecorder(stream, { mimeType });
                 audioChunks = [];
                 
                 mediaRecorder.ondataavailable = (e) => {
@@ -638,7 +644,7 @@
                 };
                 
                 mediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+                    const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
                     await uploadAudio(audioBlob);
                 };
                 
@@ -663,26 +669,40 @@
         }
         
         async function uploadAudio(audioBlob) {
-            const formData = new FormData();
-            formData.append('audio', audioBlob, 'recording.mp3');
-            formData.append('store_id', user.store_ids?.[0] || 'store_001');
+            const storeId = user.store_ids?.[0] || 'store_001';
             
             try {
-                const response = await fetch('/api/voice/upload', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    showResult(data.extracted_data);
-                } else {
-                    document.getElementById('recordStatus').textContent = '识别失败：' + data.message;
-                }
+                // 将音频转为base64直接发送给ASR识别
+                const reader = new FileReader();
+                reader.onloadend = async function() {
+                    const base64Audio = reader.result.split(',')[1];
+                    
+                    try {
+                        const response = await fetch('/api/voice/base64', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: JSON.stringify({
+                                audio_base64: base64Audio,
+                                audio_format: 'webm',
+                                store_id: storeId
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            showResult(data.extracted_data || {});
+                        } else {
+                            document.getElementById('recordStatus').textContent = '识别失败：' + (data.error || '未知错误');
+                        }
+                    } catch (error) {
+                        document.getElementById('recordStatus').textContent = '识别失败，请重试';
+                    }
+                };
+                reader.readAsDataURL(audioBlob);
             } catch (error) {
                 document.getElementById('recordStatus').textContent = '上传失败，请重试';
             }
@@ -715,7 +735,7 @@
             // 打开拍照/上传界面
             const input = document.createElement('input');
             input.type = 'file';
-            input.accept = 'image/*';
+            input.accept = 'image/*,.pdf';
             input.capture = 'environment';
             input.onchange = handlePhotoUpload;
             input.click();
@@ -725,26 +745,51 @@
             const file = e.target.files[0];
             if (!file) return;
             
+            const fileName = file.name.toLowerCase();
+            const isPdf = fileName.endsWith('.pdf');
             const formData = new FormData();
-            formData.append('image', file);
+            formData.append('file', file);
             formData.append('store_id', user.store_ids?.[0] || 'store_001');
             
             // 显示上传中
-            alert('📸 正在识别...');
+            document.getElementById('recordStatus') && (document.getElementById('recordStatus').textContent = '正在上传...');
             
             try {
-                const response = await fetch('/api/image/upload', {
+                // 第一步：上传文件到对象存储
+                const uploadResp = await fetch('/api/upload', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`
                     },
                     body: formData
                 });
+                const uploadData = await uploadResp.json();
+                
+                if (!uploadData.success) {
+                    alert('上传失败：' + (uploadData.error || '未知错误'));
+                    return;
+                }
+                
+                // 第二步：根据文件类型调用识别接口
+                const apiUrl = isPdf ? '/api/document' : '/api/image';
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        file_url: uploadData.url,
+                        store_id: user.store_ids?.[0] || 'store_001'
+                    })
+                });
                 
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert('✅ 识别成功！\n\n' + JSON.stringify(data.extracted_data, null, 2));
+                    showResult(data.extracted_data || {});
+                } else {
+                    alert('识别失败：' + (data.error || '未知错误'));
                 }
             } catch (error) {
                 alert('上传失败，请重试');

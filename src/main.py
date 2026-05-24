@@ -293,16 +293,69 @@ async def api_query(request: Request):
 
 @app.post("/api/voice")
 async def api_voice(request: Request):
-    """语音报账API"""
+    """语音报账API - 接收audio_url进行语音识别"""
     try:
         payload = await request.json()
         payload["input_type"] = "voice"
+        
+        # 将audio_url转换为audio_file格式
+        audio_url = payload.pop("audio_url", None)
+        if audio_url:
+            payload["audio_file"] = {"url": audio_url, "file_type": "audio"}
         
         ctx = new_context(method="api_voice")
         result = await service.run(payload, ctx)
         
         return {"success": True, **result}
     except Exception as e:
+        logger.error(f"语音报账失败: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/voice/base64")
+async def api_voice_base64(request: Request):
+    """语音识别API - 接收base64编码的音频进行ASR识别"""
+    import base64
+    from coze_coding_dev_sdk import ASRClient
+    
+    try:
+        data = await request.json()
+        audio_base64 = data.get("audio_base64", "")
+        audio_format = data.get("audio_format", "webm")
+        store_id = data.get("store_id", "")
+        
+        if not audio_base64:
+            return {"success": False, "error": "音频数据不能为空"}
+        
+        ctx = new_context(method="api_voice_base64")
+        
+        # 步骤1：使用ASR客户端直接用base64识别语音
+        asr_client = ASRClient(ctx=ctx)
+        recognized_text, asr_data = asr_client.recognize(
+            uid="accounting_assistant",
+            base64_data=audio_base64
+        )
+        
+        if not recognized_text or not recognized_text.strip():
+            return {"success": False, "error": "语音识别结果为空，请重新录音"}
+        
+        # 步骤2：将识别文本构造成工作流输入，传入recognized_text跳过ASR节点
+        payload = {
+            "input_type": "voice",
+            # 不传audio_file，ASR节点会检测到无音频文件并透传recognized_text
+            "recognized_text": recognized_text,  # 直接传入识别结果
+            "store_id": store_id
+        }
+        
+        nlu_result = await service.run(payload, ctx)
+        
+        return {
+            "success": True,
+            "recognized_text": recognized_text,
+            "extracted_data": nlu_result.get("extracted_data", {}),
+            **nlu_result
+        }
+    except Exception as e:
+        logger.error(f"语音识别失败: {e}")
         return {"success": False, "error": str(e)}
 
 @app.post("/api/upload")
@@ -338,16 +391,47 @@ async def api_upload(file: UploadFile = File(...)):
 
 @app.post("/api/image")
 async def api_image(request: Request):
-    """拍照录入API"""
+    """拍照录入API - 接收file_url进行图片识别"""
     try:
         payload = await request.json()
         payload["input_type"] = "image"
+        
+        # 将file_url转换为image_file格式
+        file_url = payload.pop("file_url", None) or payload.pop("image_url", None)
+        if file_url:
+            payload["image_file"] = {"url": file_url, "file_type": "image"}
         
         ctx = new_context(method="api_image")
         result = await service.run(payload, ctx)
         
         return {"success": True, **result}
     except Exception as e:
+        logger.error(f"图片识别失败: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/document")
+async def api_document(request: Request):
+    """文档识别API - 支持PDF等文档文件识别"""
+    try:
+        payload = await request.json()
+        payload["input_type"] = "image"  # 复用image通道，OCR节点会检测PDF
+        
+        # 将file_url转换为image_file格式（PDF也用image_file传递）
+        file_url = payload.pop("file_url", None) or payload.pop("document_url", None)
+        if file_url:
+            payload["image_file"] = {"url": file_url, "file_type": "document"}
+        
+        ctx = new_context(method="api_document")
+        result = await service.run(payload, ctx)
+        
+        return {
+            "success": True,
+            "recognized_text": result.get("ocr_text", ""),
+            "extracted_data": result.get("extracted_data", {}),
+            **result
+        }
+    except Exception as e:
+        logger.error(f"文档识别失败: {e}")
         return {"success": False, "error": str(e)}
 
 @app.get("/api/records")

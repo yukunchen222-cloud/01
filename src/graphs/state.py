@@ -258,6 +258,14 @@ class GraphInput(BaseModel):
         default=None, 
         description="图片文件（当input_type为image时必填）"
     )
+    recognized_text: str = Field(
+        default="",
+        description="已识别的语音文本（外部ASR完成后直接传入，跳过ASR节点）"
+    )
+    ocr_text: str = Field(
+        default="",
+        description="已识别的OCR文本（外部OCR完成后直接传入）"
+    )
     query_type: Optional[Literal["today", "week", "month", "anomaly", "report"]] = Field(
         default=None, 
         description="查询类型：today(今日看板)、week(本周报表)、month(月报)、anomaly(异常预警)、report(导出报告)"
@@ -320,6 +328,7 @@ class ASRInput(BaseModel):
     """ASR语音识别节点输入 - 从 GlobalState 获取"""
     audio_file: Optional[File] = Field(default=None, description="语音文件")
     input_type: str = Field(default="voice", description="输入类型")
+    recognized_text: str = Field(default="", description="已识别的文本（外部ASR完成后直接传入）")
 
 
 class ASROutput(BaseModel):
@@ -334,6 +343,7 @@ class OCRInput(BaseModel):
     """OCR图片识别节点输入 - 从 GlobalState 获取"""
     image_file: Optional[File] = Field(default=None, description="图片文件")
     input_type: str = Field(default="image", description="输入类型")
+    ocr_text: str = Field(default="", description="已有的OCR识别文本（外部传入时保留）")
 
 
 class OCROutput(BaseModel):
