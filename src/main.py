@@ -970,13 +970,13 @@ async def get_dashboard_data(
             "dashboard_data": {
                 "period": period,
                 "summary": {
-                    "total_revenue": total_revenue,
-                    "total_cost": total_cost,
-                    "total_expense": total_expense,
-                    "total_returns": total_returns,
-                    "gross_profit": gross_profit,
+                    "total_revenue": round(total_revenue, 0),
+                    "total_cost": round(total_cost, 0),
+                    "total_expense": round(total_expense, 0),
+                    "total_returns": round(total_returns, 0),
+                    "gross_profit": round(gross_profit, 0),
                     "gross_margin": round(gross_margin, 1),
-                    "net_profit": net_profit,
+                    "net_profit": round(net_profit, 0),
                     "net_margin": round(net_margin, 1),
                     "transaction_count": transaction_count,
                     "fixed_expenses": fixed_expenses
