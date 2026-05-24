@@ -2,7 +2,7 @@
 
 ## 项目概述
 - **名称**: 服装连锁AI记账助手
-- **功能**: 面向服装连锁店的智能记账系统，支持语音报账、拍照录入、数据看板、异常预警等功能
+- **功能**: 面向服装连锁店的智能记账系统，支持语音报账、拍照录入、数据看板、异常预警、多格式报告导出、飞书消息推送等功能
 
 ## 用户角色
 | 角色 | 权限 | 默认账号 | 密码 |
@@ -12,12 +12,14 @@
 | 会计(accountant) | 数据查看、报表导出 | accountant | 123456 |
 
 ## 核心功能
-1. **语音报账**: 说一句话自动记账
-2. **拍照录入**: 拍单据自动识别入库
+1. **语音报账**: 说一句话自动记账，支持ASR语音识别
+2. **拍照录入**: 拍单据自动识别入库，支持OCR图片识别
 3. **数据看板**: 实时营收、毛利、趋势分析
 4. **异常预警**: 毛利率异常、营收偏离检测
-5. **报告生成**: 自动生成经营报告
+5. **报告生成**: 自动生成经营报告，支持PDF/Word/Excel多格式导出
 6. **商品管理**: SKU管理、库存预警
+7. **飞书通知**: 异常预警、日报推送到飞书群
+8. **知识库增强**: 商品知识库提升NLU识别准确率
 
 ## 节点清单
 
@@ -25,11 +27,12 @@
 |-------|---------|------|---------|---------|
 | asr_recognition | `nodes/asr_recognition_node.py` | task | ASR语音识别，将音频转为文字 | - |
 | ocr_recognition | `nodes/ocr_recognition_node.py` | task | OCR图片识别，提取图片中的账目信息 | - |
-| nlu_extraction | `nodes/nlu_extraction_node.py` | agent | NLU意图识别，提取结构化数据 | `config/nlu_extraction_cfg.json` |
+| nlu_extraction | `nodes/nlu_extraction_node.py` | agent | NLU意图识别，提取结构化数据，支持知识库增强 | `config/nlu_extraction_cfg.json` |
 | data_validation | `nodes/data_validation_node.py` | task | 数据校验，验证提取的数据完整性 | - |
 | data_aggregation | `nodes/data_aggregation_node.py` | task | 数据聚合，计算营收/成本/毛利 | - |
 | anomaly_detection | `nodes/anomaly_detection_node.py` | agent | 异常检测，检测毛利率/营收异常 | `config/anomaly_detection_cfg.json` |
-| report_generation | `nodes/report_generation_node.py` | task | 报告生成，生成经营分析报告 | - |
+| report_generation | `nodes/report_generation_node.py` | task | 报告生成，生成Markdown格式经营分析报告 | - |
+| report_export | `nodes/report_export_node.py` | task | 报告导出，支持PDF/DOCX/XLSX多格式 | - |
 | dashboard_query | `nodes/dashboard_query_node.py` | task | 看板查询，返回统计数据 | - |
 | route_input_type | `graph.py` | condition | 输入类型路由 | - |
 
@@ -58,7 +61,9 @@
 │   │   ├── graph.py        # 主图编排
 │   │   └── nodes/          # 节点实现
 │   └── utils/
-│       └── auth.py         # 认证模块
+│       ├── auth.py         # 认证模块
+│       ├── feishu_notify.py    # 飞书消息推送
+│       └── product_knowledge.py # 商品知识库
 └── AGENTS.md               # 本文件
 ```
 
@@ -83,6 +88,17 @@
 | `/api/stores/list` | GET | 门店列表(带权限) |
 | `/api/records` | GET | 历史记录 |
 
+### 报告相关
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/report` | POST | 生成Markdown报告 |
+| `/api/report/export` | POST | 导出PDF/Word/Excel报告 |
+
+### 消息推送
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/notify/feishu` | POST | 推送消息到飞书群 |
+
 ### 商品管理
 | 端点 | 方法 | 说明 |
 |------|------|------|
@@ -90,6 +106,11 @@
 | `/api/products` | POST | 创建商品 |
 | `/api/products/{id}` | PUT | 更新商品 |
 | `/api/products/{id}` | DELETE | 删除商品 |
+
+### 知识库
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/knowledge/search` | POST | 商品知识库搜索 |
 
 ## 数据类型
 

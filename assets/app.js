@@ -625,6 +625,179 @@ function generateReport(type) {
     });
 }
 
+// 导出报告（支持PDF/DOCX/XLSX多格式）
+function exportReport(format = 'pdf') {
+    const formatNames = { pdf: 'PDF', docx: 'Word文档', xlsx: 'Excel表格' };
+    const formatName = formatNames[format] || format.toUpperCase();
+    
+    showLoading();
+    
+    // 获取当前看板数据
+    const summaryData = window.dashboardSummary || {};
+    const storeStats = window.dashboardStoreStats || {};
+    const categoryStats = window.dashboardCategoryStats || {};
+    const alerts = window.dashboardAlerts || [];
+    const productAnalysis = window.dashboardProductAnalysis || {};
+    
+    fetch(`${API_BASE}/api/report/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            report_type: format,
+            period: currentPeriod,
+            start_date: summaryData.start_date || '',
+            end_date: summaryData.end_date || '',
+            summary: summaryData,
+            store_stats: storeStats,
+            category_stats: categoryStats,
+            anomaly_alerts: alerts,
+            product_analysis: productAnalysis,
+            org_name: '服装连锁'
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        hideLoading();
+        if (data.success && data.report_url) {
+            // 创建下载链接
+            const link = document.createElement('a');
+            link.href = data.report_url;
+            link.download = `经营报告_${currentPeriod}.${format}`;
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showNotification(`✅ ${formatName}报告已生成，开始下载...`, 'success');
+        } else {
+            showNotification(`❌ ${formatName}报告生成失败: ${data.message || '未知错误'}`, 'error');
+        }
+    })
+    .catch(err => {
+        hideLoading();
+        showNotification(`❌ ${formatName}报告生成失败，请稍后重试`, 'error');
+        console.error('报告导出错误:', err);
+    });
+}
+
+// 发送报告到飞书
+function sendReportToFeishu() {
+    const summaryData = window.dashboardSummary || {};
+    const topProducts = window.dashboardProductAnalysis?.top_sellers || [];
+    
+    fetch(`${API_BASE}/api/notify/feishu`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            type: 'daily_report',
+            store_name: currentStore === 'all' ? '全部门店' : document.getElementById('storeSelect')?.selectedOptions[0]?.text || '',
+            summary: summaryData,
+            top_products: topProducts.slice(0, 3)
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('✅ 报告已发送到飞书群', 'success');
+        } else {
+            showNotification('❌ 发送失败: ' + (data.error || '未配置飞书机器人'), 'error');
+        }
+    })
+    .catch(err => {
+        showNotification('❌ 发送失败，请检查网络', 'error');
+    });
+}
+
+// 发送异常预警到飞书
+function sendAlertToFeishu() {
+    const alerts = window.dashboardAlerts || [];
+    const storeName = currentStore === 'all' ? '全部门店' : document.getElementById('storeSelect')?.selectedOptions[0]?.text || '';
+    
+    if (alerts.length === 0) {
+        showNotification('当前无异常预警', 'info');
+        return;
+    }
+    
+    fetch(`${API_BASE}/api/notify/feishu`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            type: 'anomaly',
+            store_name: storeName,
+            alerts: alerts
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('✅ 预警已发送到飞书群', 'success');
+        } else {
+            showNotification('❌ 发送失败: ' + (data.error || '未配置飞书机器人'), 'error');
+        }
+    })
+    .catch(err => {
+        showNotification('❌ 发送失败，请检查网络', 'error');
+    });
+}
+
+// 显示通知
+function showNotification(message, type = 'info') {
+    // 创建通知元素
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `
+        <span class="notification-message">${message}</span>
+        <button class="notification-close" onclick="this.parentElement.remove()">×</button>
+    `;
+    
+    // 添加样式
+    notification.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        padding: 16px 24px;
+        background: ${type === 'success' ? '#4caf50' : type === 'error' ? '#f44336' : '#2196f3'};
+        color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        animation: slideIn 0.3s ease-out;
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // 3秒后自动消失
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-in';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// 添加CSS动画
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+    .notification-close {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 20px;
+        cursor: pointer;
+        padding: 0 0 0 8px;
+    }
+`;
+document.head.appendChild(style);
+
 // 加载状态
 function showLoading() {
     document.getElementById('loadingOverlay')?.classList.add('show');

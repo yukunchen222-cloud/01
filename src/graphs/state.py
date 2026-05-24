@@ -349,6 +349,7 @@ class NLUInput(BaseModel):
     recognized_text: str = Field(default="", description="ASR识别的文字")
     ocr_text: str = Field(default="", description="OCR识别的文字")
     input_type: str = Field(default="voice", description="输入类型，用于判断使用哪个文本")
+    org_id: str = Field(default="org_default", description="组织ID，用于知识库查询")
 
 
 class NLUOutput(BaseModel):

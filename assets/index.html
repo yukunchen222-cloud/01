@@ -231,6 +231,9 @@
                         <button class="filter-btn">营收异常</button>
                         <button class="filter-btn">库存异常</button>
                         <button class="filter-btn">成本异常</button>
+                        <button class="btn-action" onclick="sendAlertToFeishu()" style="margin-left: auto; background: linear-gradient(135deg, #9b59b6, #8e44ad); padding: 8px 16px; font-size: 14px;">
+                            <i class="fas fa-paper-plane"></i> 推送到飞书
+                        </button>
                     </div>
                     <div id="alertsList" class="alerts-container"></div>
                 </div>
@@ -363,6 +366,27 @@
                             <p>本年度经营数据汇总</p>
                             <button class="btn-report">
                                 <i class="fas fa-file-pdf"></i> 生成PDF
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 多格式导出 -->
+                    <div class="section-card" style="margin-top: 24px;">
+                        <div class="section-header">
+                            <h3><i class="fas fa-download"></i> 导出当前报告</h3>
+                        </div>
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap; padding: 16px;">
+                            <button class="btn-action" onclick="exportReport('pdf')" style="background: linear-gradient(135deg, #e74c3c, #c0392b);">
+                                <i class="fas fa-file-pdf"></i> 导出PDF报告
+                            </button>
+                            <button class="btn-action" onclick="exportReport('docx')" style="background: linear-gradient(135deg, #3498db, #2980b9);">
+                                <i class="fas fa-file-word"></i> 导出Word文档
+                            </button>
+                            <button class="btn-action" onclick="exportReport('xlsx')" style="background: linear-gradient(135deg, #27ae60, #229954);">
+                                <i class="fas fa-file-excel"></i> 导出Excel表格
+                            </button>
+                            <button class="btn-action" onclick="sendReportToFeishu()" style="background: linear-gradient(135deg, #9b59b6, #8e44ad);">
+                                <i class="fas fa-paper-plane"></i> 发送到飞书
                             </button>
                         </div>
                     </div>

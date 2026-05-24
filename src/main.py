@@ -725,6 +725,130 @@ async def upload_image(file: UploadFile = File(...), store_id: str = ""):
         logger.error(f"图片上传失败: {e}")
         return {"success": False, "error": str(e)}
 
+# ==================== 报告导出API ====================
+
+@app.post("/api/report/export")
+async def export_report(request: Request):
+    """导出经营报告 (PDF/DOCX/XLSX)"""
+    from graphs.nodes.report_export_node import report_export_node, ReportExportInput
+    
+    try:
+        data = await request.json()
+        
+        # 构建输入
+        report_input = ReportExportInput(
+            report_type=data.get("report_type", "pdf"),
+            period=data.get("period", "month"),
+            start_date=data.get("start_date", ""),
+            end_date=data.get("end_date", ""),
+            summary=data.get("summary", {}),
+            store_stats=data.get("store_stats", {}),
+            category_stats=data.get("category_stats", {}),
+            trend_data=data.get("trend_data", []),
+            anomaly_alerts=data.get("anomaly_alerts", []),
+            product_analysis=data.get("product_analysis", {}),
+            org_name=data.get("org_name", "服装连锁")
+        )
+        
+        # 调用报告生成
+        from coze_coding_utils.runtime_ctx.context import Context
+        ctx = new_context(method="report_export")
+        runtime = type('Runtime', (), {'context': ctx})()
+        config = {"configurable": {}}
+        
+        result = report_export_node(report_input, config, runtime)
+        
+        return {
+            "success": result.success,
+            "report_url": result.report_url,
+            "report_type": result.report_type,
+            "message": result.message
+        }
+    except Exception as e:
+        logger.error(f"报告导出失败: {e}")
+        return {"success": False, "error": str(e)}
+
+# ==================== 飞书通知API ====================
+
+@app.post("/api/notify/feishu")
+async def send_feishu_notification(request: Request):
+    """发送飞书通知"""
+    from utils.feishu_notify import send_anomaly_alert, send_daily_report, send_inventory_alert, send_text_message
+    
+    try:
+        data = await request.json()
+        notify_type = data.get("type", "text")
+        
+        if notify_type == "anomaly":
+            result = send_anomaly_alert(
+                store_name=data.get("store_name", ""),
+                alerts=data.get("alerts", []),
+                dashboard_url=data.get("dashboard_url")
+            )
+        elif notify_type == "daily_report":
+            result = send_daily_report(
+                store_name=data.get("store_name", ""),
+                summary=data.get("summary", {}),
+                top_products=data.get("top_products"),
+                report_url=data.get("report_url")
+            )
+        elif notify_type == "inventory":
+            result = send_inventory_alert(
+                store_name=data.get("store_name", ""),
+                low_stock_items=data.get("low_stock_items", [])
+            )
+        else:
+            result = send_text_message(data.get("text", ""))
+        
+        return {"success": True, "result": result}
+    except Exception as e:
+        logger.error(f"飞书通知发送失败: {e}")
+        return {"success": False, "error": str(e)}
+
+# ==================== 商品知识库API ====================
+
+@app.get("/api/products/search")
+async def search_products_api(query: str, org_id: str = "org_default"):
+    """搜索商品（知识库）"""
+    from utils.product_knowledge import search_product
+    
+    try:
+        results = search_product(query, org_id)
+        return {"success": True, "products": results, "total": len(results)}
+    except Exception as e:
+        logger.error(f"商品搜索失败: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/products/categories")
+async def get_categories_api(org_id: str = "org_default"):
+    """获取商品类目列表"""
+    from utils.product_knowledge import get_product_knowledge_base
+    
+    try:
+        kb = get_product_knowledge_base(org_id)
+        categories = kb.get_categories()
+        return {"success": True, "categories": categories}
+    except Exception as e:
+        logger.error(f"获取类目失败: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/products/price-range")
+async def get_price_range_api(
+    product_name: str = None,
+    category: str = None,
+    org_id: str = "org_default"
+):
+    """获取商品价格范围"""
+    from utils.product_knowledge import get_product_knowledge_base
+    
+    try:
+        kb = get_product_knowledge_base(org_id)
+        price_range = kb.get_price_range(product_name, category)
+        return {"success": True, **price_range}
+    except Exception as e:
+        logger.error(f"获取价格范围失败: {e}")
+        return {"success": False, "error": str(e)}
+
 # ==================== 原有API路由 ====================
 
 
