@@ -143,6 +143,7 @@ def _try_jianying_automation(
 ) -> Dict[str, Any]:
     """
     尝试使用剪映自动化进行剪辑
+    优先使用剪映网页版，失败则尝试桌面版
     
     Returns:
         包含success和error的字典
@@ -153,6 +154,54 @@ def _try_jianying_automation(
         'success_operations': [],
         'failed_operations': []
     }
+    
+    # ========================================
+    # 优先尝试剪映网页版
+    # ========================================
+    edit_log.append("🌐 尝试使用剪映网页版...")
+    
+    try:
+        from tools.jianying_web_controller import JianyingWebController, check_playwright_installed
+        
+        # 检查 Playwright 是否安装
+        if check_playwright_installed():
+            # 创建控制器
+            jianying_web = JianyingWebController(headless=False)
+            
+            # 构建剪辑计划
+            edit_plan = {
+                'edit_points': edit_operations or [],
+                'hook_config': hook_config,
+                'audio_strategy': audio_strategy
+            }
+            
+            # 执行剪辑
+            exec_result = jianying_web.execute_edit_plan(
+                edit_plan=edit_plan,
+                video_path=material_path,
+                output_path=output_path
+            )
+            
+            if exec_result.get('success'):
+                result['success'] = True
+                result['success_operations'] = exec_result.get('operations', [])
+                edit_log.append("✅ 剪映网页版剪辑完成")
+                return result
+            else:
+                edit_log.append(f"⚠️ 剪映网页版失败: {exec_result.get('errors', [])}")
+                jianying_web.close()
+        else:
+            edit_log.append("⚠️ Playwright 未安装，跳过剪映网页版")
+            
+    except ImportError as e:
+        edit_log.append(f"⚠️ 剪映网页版控制器不可用: {e}")
+    except Exception as e:
+        edit_log.append(f"⚠️ 剪映网页版执行出错: {e}")
+    
+    # ========================================
+    # 尝试剪映桌面版
+    # ========================================
+    edit_log.append("🖥️ 尝试使用剪映桌面版...")
     
     try:
         # 导入剪映控制器
@@ -185,11 +234,11 @@ def _try_jianying_automation(
         if exec_result.get('success'):
             result['success'] = True
             result['success_operations'] = exec_result.get('operations', [])
-            edit_log.append("✅ 剪映自动化剪辑完成")
+            edit_log.append("✅ 剪映桌面版剪辑完成")
         else:
             result['error'] = "; ".join(exec_result.get('errors', ['未知错误']))
             result['failed_operations'] = exec_result.get('failed_operations', [])
-            edit_log.append(f"❌ 剪映自动化失败: {result['error']}")
+            edit_log.append(f"❌ 剪映桌面版失败: {result['error']}")
         
     except ImportError as e:
         result['error'] = f"剪映控制器导入失败: {str(e)}"

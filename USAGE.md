@@ -62,7 +62,8 @@ ffmpeg -version
 
 ```bash
 cd /workspace/projects
-pip install pyautogui pywinauto pillow
+pip install playwright
+python -m playwright install chromium
 ```
 
 ## 二、使用流程
@@ -74,6 +75,18 @@ python run_workflow.py
 ```
 
 选择 **模式1** 即可自动处理素材库内所有视频。
+
+### 剪映网页版使用说明
+
+**首次使用：**
+1. 运行工作流时，浏览器会自动打开剪映网页版
+2. 需要手动登录您的抖音账号（扫码或密码登录）
+3. 登录后，工作流会自动执行剪辑操作
+
+**后续使用：**
+- 浏览器会保存登录状态，无需重复登录
+- 工作流会自动控制剪映网页版进行剪辑
+- 剪辑完成后可直接导出或发布到抖音
 
 ### 详细流程
 
@@ -90,7 +103,7 @@ python run_workflow.py
 2. ✅ 自动识别视频类型（都市情感/古装穿越/悬疑推理等）
 3. ✅ 搜索同类爆款视频并分析
 4. ✅ 生成剪辑策略
-5. ✅ **自动启动剪映执行剪辑**
+5. ✅ **自动打开剪映网页版执行剪辑**
 6. ✅ 导出成品到成品库
 7. ✅ 生成发布元数据（标题、封面、标签等）
     "material_library": "您的素材库路径",

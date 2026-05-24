@@ -41,6 +41,7 @@ dependencies = [
     "PyGObject==3.48.2",
     "pyautogui>=0.9.54",
     "pywinauto>=0.6.9",
+    "playwright>=1.60.0",
 ]
 
 [tool.uv]

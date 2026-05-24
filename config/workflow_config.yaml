@@ -9,7 +9,14 @@ OUTPUT_LIBRARY: "C:/Users/lonel/Desktop/成品库"
 # FFmpeg路径 - 视频处理必需
 FFMPEG_PATH: "C:/Users/lonel/AppData/Local/Microsoft/WinGet/Packages/Gyan.FFmpeg_*/ffmpeg-8.1.1-full_build/bin/ffmpeg.exe"
 
-# 剪映安装路径 (可选，用于剪映桌面版自动化)
+# 剪辑引擎选择: "web" (网页版) 或 "desktop" (桌面版)
+EDIT_ENGINE: "web"
+
+# 剪映网页版配置
+JIANYING_WEB_URL: "https://www.capcut.cn/editor"
+JIANYING_WEB_HEADLESS: false  # 是否无头模式运行浏览器
+
+# 剪映桌面版路径 (可选，EDIT_ENGINE为desktop时使用)
 JIANYING_PATH: ""
 
 # 抖音创作者平台
