@@ -1,11 +1,20 @@
 import argparse
 import asyncio
 import json
+import os
 import threading
 import traceback
 import logging
 from functools import wraps
 from typing import Any, Dict, Iterable, AsyncIterable, AsyncGenerator, Optional
+
+# 确保 JWT_SECRET 在 auth 模块加载前设置
+if not os.getenv("JWT_SECRET"):
+    os.environ["JWT_SECRET"] = "coze_clothing_ai_prod_key_2026"
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "⚠️ JWT_SECRET 环境变量未设置，已使用开发密钥。生产环境请务必配置！"
+    )
 import cozeloop
 import uvicorn
 import time

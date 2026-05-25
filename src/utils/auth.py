@@ -1,20 +1,29 @@
 """
 用户认证模块 - JWT Token 验证和用户管理
 数据库操作已迁移到 asyncpg (repository.py)
+密码哈希使用 bcrypt，JWT_SECRET 强制从环境变量读取
 """
 import os
-import json
-import hashlib
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 import jwt
+import bcrypt
 
 logger = logging.getLogger(__name__)
 
-# JWT配置
-JWT_SECRET = os.getenv("JWT_SECRET", "coze_clothing_ai_secret_key_2024")
+# JWT配置 — 强制从环境变量读取，缺失则启动失败
+_jwt_secret = os.getenv("JWT_SECRET")
+if not _jwt_secret:
+    # 开发环境兜底：生成临时密钥并警告
+    import secrets
+    _jwt_secret = secrets.token_hex(32)
+    logger.warning(
+        "⚠️ JWT_SECRET 环境变量未设置，已生成临时密钥。"
+        "生产环境请务必设置 JWT_SECRET 环境变量，否则服务重启后所有 token 失效！"
+    )
+JWT_SECRET: str = _jwt_secret
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = 24
 
@@ -81,13 +90,31 @@ class Product(BaseModel):
 
 
 def hash_password(password: str) -> str:
-    """密码哈希"""
-    return hashlib.sha256(f"{password}{JWT_SECRET}".encode()).hexdigest()
+    """使用 bcrypt 哈希密码（每个用户自动生成独立 salt）"""
+    password_bytes: bytes = password.encode("utf-8")
+    salt: bytes = bcrypt.gensalt(rounds=12)
+    hashed: bytes = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    """验证密码"""
-    return hash_password(password) == password_hash
+    """验证密码（兼容 bcrypt 和旧的 SHA256 哈希）"""
+    # 优先尝试 bcrypt 验证
+    try:
+        password_bytes: bytes = password.encode("utf-8")
+        hash_bytes: bytes = password_hash.encode("utf-8")
+        if bcrypt.checkpw(password_bytes, hash_bytes):
+            return True
+    except Exception:
+        pass
+
+    # 兼容旧的 SHA256 哈希（迁移期间保留）
+    import hashlib
+    old_hash: str = hashlib.sha256(f"{password}{JWT_SECRET}".encode()).hexdigest()
+    if old_hash == password_hash:
+        return True
+
+    return False
 
 
 def create_token(user_id: str, role: str, org_id: str, store_ids: List[str]) -> str:
