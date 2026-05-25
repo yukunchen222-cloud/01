@@ -274,7 +274,10 @@ async def update_record(record_id: str, updates: dict) -> Optional[dict]:
     sql = f"UPDATE records SET {', '.join(set_parts)} WHERE id = ${idx} RETURNING *"
     async with _acquire_conn() as conn:
         row = await conn.fetchrow(sql, *args)
-        return _row_to_dict(row)
+        result = _row_to_dict(row)
+        if result and "id" in result and "product_id" not in result:
+            result["product_id"] = result["id"]
+        return result
 
 
 async def approve_record(record_id: str) -> Optional[dict]:
@@ -311,7 +314,12 @@ async def get_all_products(org_id: str = "org_default") -> List[dict]:
             "SELECT * FROM products WHERE org_id = $1 ORDER BY created_at DESC",
             org_id,
         )
-        return _rows(rows)
+        result: List[dict] = _rows(rows)
+        # 前端用 product_id 字段，数据库主键是 id，添加别名
+        for p in result:
+            if "id" in p and "product_id" not in p:
+                p["product_id"] = p["id"]
+        return result
 
 
 # 别名：main.py 中使用 repo.get_products
@@ -319,6 +327,10 @@ get_products = get_all_products
 
 
 async def insert_product(product: dict) -> dict:
+    # 自动生成 id（如果未提供）
+    if not product.get("id"):
+        import uuid
+        product["id"] = "prod_" + uuid.uuid4().hex[:16]
     async with _acquire_conn() as conn:
         row = await conn.fetchrow(
             """
@@ -336,7 +348,10 @@ async def insert_product(product: dict) -> dict:
             int(product.get("stock", 0)),
             product.get("sku", ""),
         )
-        return _row_to_dict(row)
+        result = _row_to_dict(row)
+        if result and "id" in result and "product_id" not in result:
+            result["product_id"] = result["id"]
+        return result
 
 
 async def update_product(product_id: str, updates: dict) -> Optional[dict]:
