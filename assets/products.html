@@ -983,7 +983,7 @@
                     throw new Error('不支持的文件格式，请上传图片或Excel文件');
                 }
                 
-                var resp = await fetch('/api/table/recognize', {
+                var resp = await fetch('/api/table/smart-recognize', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                     body: JSON.stringify(requestBody)
@@ -992,22 +992,40 @@
                 if (!result.success) throw new Error(result.error || '识别失败');
 
                 // 展示结果
-                recognizedRows = result.rows || [];
+                recognizedRows = result.items || [];
                 recognizedType = result.table_type || importType;
 
                 var resultDiv = document.getElementById('recognizeResult');
                 resultDiv.style.display = '';
 
-                var html = '<div class="result-header">✅ 识别成功！共 ' + result.row_count + ' 行数据';
-                html += '（' + (recognizedType === 'products' ? '商品清单' : '进销存记录') + '）</div>';
+                var html = '<div class="result-header">✅ 智能识别成功！共 ' + recognizedRows.length + ' 个商品';
+                html += '</div>';
 
                 if (recognizedRows.length > 0) {
-                    var cols = Object.keys(recognizedRows[0]);
-                    html += '<table><tr>' + cols.map(function(c) { return '<th>' + c + '</th>'; }).join('') + '</tr>';
+                    html += '<table><tr><th>款号</th><th>商品名称</th><th>类目</th><th>进价</th><th>售价</th><th>库存</th></tr>';
                     for (var i = 0; i < recognizedRows.length; i++) {
-                        html += '<tr>' + cols.map(function(c) { return '<td>' + (recognizedRows[i][c] != null ? recognizedRows[i][c] : '') + '</td>'; }).join('') + '</tr>';
+                        var item = recognizedRows[i];
+                        html += '<tr>' +
+                            '<td>' + (item.sku || '') + '</td>' +
+                            '<td>' + (item.name || '') + '</td>' +
+                            '<td>' + (item.category || '') + '</td>' +
+                            '<td>' + (item.cost_price || '') + '</td>' +
+                            '<td>' + (item.sale_price || '') + '</td>' +
+                            '<td>' + (item.stock || '') + '</td>' +
+                            '</tr>';
                     }
                     html += '</table>';
+                }
+
+                // 显示连带关系
+                if (result.relations && result.relations.length > 0) {
+                    html += '<div style="margin-top:12px;font-size:12px;color:#666;">';
+                    html += '<b>📊 连带关系分析：</b><br>';
+                    for (var r = 0; r < result.relations.length; r++) {
+                        var rel = result.relations[r];
+                        html += '• ' + rel.description + '<br>';
+                    }
+                    html += '</div>';
                 }
 
                 resultDiv.innerHTML = html;
@@ -1029,31 +1047,54 @@
             importBtn.textContent = '⏳ 导入中...';
 
             try {
-                var importType = document.getElementById('recognizeImportType').value;
                 var mergeDuplicate = document.getElementById('mergeDuplicate').checked;
-                var resp = await fetch('/api/table/recognize', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify({ 
-                        import_type: importType, 
-                        rows: recognizedRows, 
-                        table_type: recognizedType, 
-                        org_id: 'org_default',
-                        merge_duplicate: mergeDuplicate
-                    })
-                });
-                var result = await resp.json();
-                if (result.success) {
-                    var msg = '导入成功！共导入 ' + result.imported + ' 条数据';
-                    if (result.merged > 0) {
-                        msg += '\\n其中 ' + result.merged + ' 条为重复款号，已合并库存';
+                
+                // 直接导入已识别的数据
+                var importData = {
+                    items: recognizedRows,
+                    merge_duplicate: mergeDuplicate,
+                    org_id: 'org_default'
+                };
+                
+                // 调用批量导入接口
+                var successCount = 0;
+                var failCount = 0;
+                
+                for (var i = 0; i < recognizedRows.length; i++) {
+                    var item = recognizedRows[i];
+                    try {
+                        var resp = await fetch('/api/products', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                            body: JSON.stringify({
+                                sku: item.sku || '',
+                                name: item.name || '',
+                                category: item.category || '其他',
+                                cost_price: parseFloat(item.cost_price) || 0,
+                                sale_price: parseFloat(item.sale_price) || 0,
+                                stock: parseInt(item.stock) || 0,
+                                merge_duplicate_sku: mergeDuplicate
+                            })
+                        });
+                        var result = await resp.json();
+                        if (result.success || result.product_id) {
+                            successCount++;
+                        } else {
+                            failCount++;
+                        }
+                    } catch (e) {
+                        failCount++;
                     }
-                    alert(msg);
-                    closeRecognizeModal();
-                    await loadProducts();
-                } else {
-                    throw new Error(result.error || '导入失败');
                 }
+                
+                var msg = '导入完成！成功 ' + successCount + ' 条';
+                if (failCount > 0) {
+                    msg += '，失败 ' + failCount + ' 条';
+                }
+                alert(msg);
+                closeRecognizeModal();
+                await loadProducts();
+                
             } catch (error) {
                 alert('导入失败：' + error.message);
                 importBtn.textContent = '✅ 确认导入';

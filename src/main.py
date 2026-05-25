@@ -2130,6 +2130,138 @@ async def recognize_table(request: Request):
     return result
 
 
+# ==================== 智能表格识别API ====================
+
+@app.post("/api/table/smart-recognize")
+async def smart_recognize_table(request: Request):
+    """使用大模型智能识别表格，提取商品信息和连带关系
+    
+    请求体:
+    - image_url: 图片URL
+    - image_base64: 图片base64编码
+    - file_content: Excel/CSV文件base64编码
+    - filename: 文件名（用于判断文件类型）
+    - table_type: 表格类型 (auto/products/purchase/sales)
+    - import_after: 是否识别后自动导入 (默认false，只返回结果)
+    - analyze_relations: 是否分析连带关系 (默认true)
+    """
+    import base64 as b64
+    
+    body = await request.json()
+    image_url: str = body.get("image_url", "")
+    image_base64: str = body.get("image_base64", "")
+    file_content: str = body.get("file_content", "")  # base64编码的文件内容
+    filename: str = body.get("filename", "")
+    table_type: str = body.get("table_type", "auto")
+    import_after: bool = body.get("import_after", False)
+    analyze_relations: bool = body.get("analyze_relations", True)
+    
+    from utils.smart_table_recognition import (
+        recognize_table_with_llm,
+        recognize_excel_with_llm,
+        analyze_product_relations
+    )
+    
+    try:
+        result = {"success": False, "items": [], "relations": [], "summary": {}}
+        
+        # 1. 处理图片
+        if image_url or image_base64:
+            # 如果是base64图片，确保格式正确
+            if image_base64 and not image_base64.startswith("data:"):
+                image_base64 = f"data:image/jpeg;base64,{image_base64}"
+            
+            result = await recognize_table_with_llm(
+                image_url=image_url,
+                image_base64=image_base64,
+                table_type=table_type
+            )
+        
+        # 2. 处理Excel/CSV文件
+        elif file_content:
+            # 解码base64文件内容
+            file_bytes = b64.b64decode(file_content)
+            result = await recognize_excel_with_llm(file_bytes, filename)
+        
+        else:
+            return {"success": False, "error": "请提供 image_url、image_base64 或 file_content"}
+        
+        # 3. 分析连带关系
+        if result.get("success") and analyze_relations and result.get("items"):
+            items = result.get("items", [])
+            if len(items) >= 2:
+                relations = await analyze_product_relations(items)
+                result["relations"] = relations
+        
+        # 4. 自动导入（如果需要）
+        if result.get("success") and import_after and result.get("items"):
+            imported_count = 0
+            for item in result["items"]:
+                try:
+                    await repo.insert_product({
+                        "org_id": "org_default",
+                        "sku": item.get("sku", ""),
+                        "name": item.get("name", ""),
+                        "category": item.get("category", "其他"),
+                        "cost_price": float(item.get("cost_price", 0) or 0),
+                        "sale_price": float(item.get("sale_price", 0) or 0),
+                        "stock": int(item.get("stock", 0) or 0)
+                    }, merge_duplicate_sku=True)
+                    imported_count += 1
+                except Exception as ex:
+                    logger.warning(f"导入商品失败: {ex}")
+            
+            result["imported_count"] = imported_count
+            result["message"] = f"成功识别 {len(result['items'])} 个商品，已导入 {imported_count} 个"
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"智能表格识别失败: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/products/relations/{sku}")
+async def get_product_relations_api(sku: str, org_id: str = "org_default"):
+    """获取指定商品的连带关系"""
+    try:
+        # 获取商品信息
+        products = await repo.get_products(org_id)
+        target = None
+        for p in products:
+            if p.get("sku") == sku:
+                target = p
+                break
+        
+        if not target:
+            return {"success": False, "error": "商品不存在"}
+        
+        # 获取同类别商品作为潜在关联
+        same_category = [p for p in products if p.get("category") == target.get("category") and p.get("sku") != sku]
+        
+        # 使用大模型分析连带关系
+        from utils.smart_table_recognition import analyze_product_relations
+        all_items = [target] + same_category[:10]
+        relations = await analyze_product_relations(all_items)
+        
+        # 过滤出与目标商品相关的连带关系
+        related = []
+        for r in relations:
+            if sku in r.get("skus", []):
+                related.append(r)
+        
+        return {
+            "success": True,
+            "product": target,
+            "relations": related,
+            "related_products": [p for p in same_category if any(r.get("skus", []) and p.get("sku") in r.get("skus", []) for r in relations)]
+        }
+        
+    except Exception as e:
+        logger.error(f"获取连带关系失败: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # ==================== 商品知识库API ====================
 
 @app.get("/api/products/search")
