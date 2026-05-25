@@ -402,7 +402,7 @@
             <button class="btn btn-primary" onclick="openAddModal()">＋ 添加商品</button>
             <button class="btn btn-success" onclick="openRecognizeModal()">📷 AI识别导入</button>
             <div class="toolbar-divider"></div>
-            <button class="btn btn-outline" onclick="importProducts()">📥 CSV导入</button>
+            <button class="btn btn-outline" onclick="importProducts()">📥 Excel导入</button>
             <button class="btn btn-outline" onclick="exportProducts()">📤 导出</button>
             <button class="btn btn-outline" onclick="location.reload()">🔄 刷新</button>
         </div>
@@ -792,34 +792,37 @@
             URL.revokeObjectURL(url);
         }
 
-        /* CSV导入 */
+        /* Excel导入 */
         function importProducts() {
             var input = document.createElement('input');
             input.type = 'file';
-            input.accept = '.csv';
+            input.accept = '.xlsx,.xls';
             input.onchange = async function(e) {
                 var file = e.target.files[0];
                 if (!file) return;
                 try {
-                    var text = await file.text();
-                    var lines = text.split('\n').filter(function(l) { return l.trim(); });
-                    var dataLines = lines.slice(1);
+                    var data = await file.arrayBuffer();
+                    var workbook = XLSX.read(data, { type: 'array' });
+                    var sheetName = workbook.SheetNames[0];
+                    var worksheet = workbook.Sheets[sheetName];
+                    var jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+                    
                     var successCount = 0, failCount = 0;
-
-                    for (var i = 0; i < dataLines.length; i++) {
-                        var parts = dataLines[i].split(',').map(function(s) { return s.trim().replace(/[\r\n"]/g, ''); });
+                    for (var i = 0; i < jsonData.length; i++) {
+                        var row = jsonData[i];
+                        // 支持多种列名格式
                         var productData = {
-                            sku: parts[0] || '',
-                            name: parts[1] || '',
-                            category: parts[2] || '其他',
-                            cost_price: parseFloat(parts[3]) || 0,
-                            sale_price: parseFloat(parts[4]) || 0,
-                            stock: parseInt(parts[5]) || 0
+                            sku: row['款号'] || row['SKU'] || row['sku'] || row['货号'] || '',
+                            name: row['商品名称'] || row['名称'] || row['品名'] || row['name'] || '',
+                            category: row['类目'] || row['分类'] || row['类别'] || row['category'] || '其他',
+                            cost_price: parseFloat(row['进价'] || row['成本价'] || row['cost_price'] || 0),
+                            sale_price: parseFloat(row['售价'] || row['单价'] || row['sale_price'] || 0),
+                            stock: parseInt(row['库存'] || row['数量'] || row['stock'] || 0)
                         };
                         if (!productData.sku || !productData.name) { failCount++; continue; }
 
                         try {
-                            var resp = await fetch('/api/products', {
+                            var resp = await fetch('/api/products?merge_duplicates=true', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                                 body: JSON.stringify(productData)
