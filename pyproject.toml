@@ -39,6 +39,7 @@ dependencies = [
     "python-multipart>=0.0.29",
     "pyjwt>=2.11",
     "asyncpg>=0.31.0",
+    "pytest>=9.0.3",
 ]
 
 [tool.uv]
