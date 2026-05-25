@@ -10,12 +10,11 @@ from langgraph.runtime import Runtime
 from coze_coding_utils.runtime_ctx.context import Context
 from coze_coding_dev_sdk import ASRClient
 from graphs.state import ASRInput, ASROutput
-from utils.run_sync import run_sync
 
 logger = logging.getLogger(__name__)
 
 
-async def asr_recognition_node(
+def asr_recognition_node(
     state: ASRInput,
     config: RunnableConfig,
     runtime: Runtime[Context]
@@ -61,12 +60,11 @@ async def asr_recognition_node(
     # 初始化ASR客户端
     asr_client = ASRClient(ctx=ctx)
     
-    # 调用ASR识别
+    # 调用ASR识别（同步调用，LangGraph会在独立线程池中运行def节点）
     recognized_text: str = ""
     
     try:
-        text, data = await run_sync(
-            asr_client.recognize,
+        text, data = asr_client.recognize(
             uid="accounting_assistant",
             url=audio_url
         )

@@ -12,10 +12,9 @@ from langgraph.runtime import Runtime
 from coze_coding_utils.runtime_ctx.context import Context
 from coze_coding_dev_sdk import LLMClient
 from graphs.state import AnomalyInput, AnomalyOutput
-from utils.run_sync import run_sync
 
 
-async def anomaly_detection_node(
+def anomaly_detection_node(
     state: AnomalyInput,
     config: RunnableConfig,
     runtime: Runtime[Context]
@@ -129,8 +128,7 @@ async def anomaly_detection_node(
                 HumanMessage(content=analysis_prompt)
             ]
             
-            response = await run_sync(
-                llm_client.invoke,
+            response = llm_client.invoke(
                 messages=messages,
                 model="doubao-seed-2-0-mini-260215",
                 temperature=0.1
