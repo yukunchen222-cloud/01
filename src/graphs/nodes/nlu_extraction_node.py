@@ -13,9 +13,10 @@ from coze_coding_utils.runtime_ctx.context import Context
 from coze_coding_dev_sdk import LLMClient
 from graphs.state import NLUInput, NLUOutput
 from utils.product_knowledge import get_product_knowledge_base
+from utils.run_sync import run_sync
 
 
-def nlu_extraction_node(
+async def nlu_extraction_node(
     state: NLUInput,
     config: RunnableConfig,
     runtime: Runtime[Context]
@@ -77,7 +78,8 @@ def nlu_extraction_node(
             HumanMessage(content=user_prompt)
         ]
         
-        response = llm_client.invoke(
+        response = await run_sync(
+            llm_client.invoke,
             messages=messages,
             model=llm_config.get("model", "doubao-seed-2-0-lite-260215"),
             temperature=llm_config.get("temperature", 0.1)

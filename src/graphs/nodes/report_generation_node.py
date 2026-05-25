@@ -12,9 +12,10 @@ from langgraph.runtime import Runtime
 from coze_coding_utils.runtime_ctx.context import Context
 from coze_coding_dev_sdk import LLMClient
 from graphs.state import ReportInput, ReportOutput
+from utils.run_sync import run_sync
 
 
-def report_generation_node(
+async def report_generation_node(
     state: ReportInput,
     config: RunnableConfig,
     runtime: Runtime[Context]
@@ -85,7 +86,8 @@ def report_generation_node(
             HumanMessage(content=report_prompt)
         ]
         
-        response = llm_client.invoke(
+        response = await run_sync(
+            llm_client.invoke,
             messages=messages,
             model="doubao-seed-2-0-lite-260215",
             temperature=0.3
