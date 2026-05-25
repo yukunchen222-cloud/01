@@ -353,7 +353,7 @@ async def insert_product(product: dict, merge_duplicate_sku: bool = False) -> di
                 row = await conn.fetchrow(
                     """
                     UPDATE products 
-                    SET stock = $1, updated_at = NOW()
+                    SET stock = $1
                     WHERE id = $2
                     RETURNING *
                     """,
@@ -396,7 +396,7 @@ async def insert_product(product: dict, merge_duplicate_sku: bool = False) -> di
 async def update_product(product_id: str, updates: dict) -> Optional[dict]:
     if not updates:
         return None
-    set_parts: List[str] = ["updated_at = NOW()"]
+    set_parts: List[str] = []
     args: List[Any] = []
     idx: int = 1
     for k, v in updates.items():
