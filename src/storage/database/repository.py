@@ -357,7 +357,7 @@ async def insert_product(product: dict) -> dict:
 async def update_product(product_id: str, updates: dict) -> Optional[dict]:
     if not updates:
         return None
-    set_parts: List[str] = []
+    set_parts: List[str] = ["updated_at = NOW()"]
     args: List[Any] = []
     idx: int = 1
     for k, v in updates.items():

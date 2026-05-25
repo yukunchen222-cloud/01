@@ -191,6 +191,12 @@
 
         .actions { display: flex; gap: 6px; }
 
+        .update-time {
+            font-size: 12px;
+            color: #888;
+            white-space: nowrap;
+        }
+
         /* 空状态 */
         .empty-state {
             padding: 60px 20px;
@@ -412,6 +418,7 @@
                             <th>售价</th>
                             <th>库存</th>
                             <th>状态</th>
+                            <th>上次更新</th>
                             <th>操作</th>
                         </tr>
                     </thead>
@@ -545,6 +552,17 @@
             updateStats();
         }
 
+        function formatTime(isoString) {
+            if (!isoString) return '-';
+            var d = new Date(isoString);
+            if (isNaN(d.getTime())) return '-';
+            var month = (d.getMonth() + 1).toString().padStart(2, '0');
+            var day = d.getDate().toString().padStart(2, '0');
+            var hour = d.getHours().toString().padStart(2, '0');
+            var minute = d.getMinutes().toString().padStart(2, '0');
+            return month + '-' + day + ' ' + hour + ':' + minute;
+        }
+
         function renderProducts(filter) {
             if (filter === undefined) filter = document.getElementById('searchInput').value || '';
             const tbody = document.getElementById('productTable');
@@ -579,6 +597,7 @@
                     '<td><span class="price">¥' + (p.sale_price || 0) + '</span></td>' +
                     '<td>' + stock + '</td>' +
                     '<td><span class="stock-badge ' + statusClass + '">' + statusText + '</span></td>' +
+                    '<td class="update-time">' + formatTime(p.updated_at || p.created_at) + '</td>' +
                     '<td class="actions">' +
                         '<button class="btn btn-outline btn-sm" onclick="editProduct(\'' + (p.product_id || p.sku) + '\')">编辑</button>' +
                         '<button class="btn btn-danger btn-sm" onclick="deleteProduct(\'' + (p.product_id || p.sku) + '\')">删除</button>' +
