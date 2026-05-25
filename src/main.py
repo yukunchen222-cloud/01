@@ -1647,6 +1647,221 @@ async def send_feishu_notification(request: Request):
         logger.error(f"飞书通知发送失败: {e}")
         return {"success": False, "error": str(e)}
 
+# ==================== 表格识别API ====================
+
+@app.post("/api/table/recognize")
+async def recognize_table(request: Request):
+    """用多模态大模型识别表格图片/文件，返回结构化数据并可选自动导入
+
+    请求体:
+    - image_url: 图片URL（拍照/截图的表格）
+    - file_url:  文件URL（Excel/PDF等）
+    - import_type: 导入类型 "products"(商品) | "records"(记录)，空则只识别不导入
+    - org_id: 组织ID
+    - store_id: 门店ID（records导入时需要）
+    - rows: 直接传入已识别的行数据（确认导入时用，跳过识别步骤）
+    - table_type: 直接传入表格类型（配合rows使用）
+    """
+    import re as _re
+    import uuid
+
+    body = await request.json()
+    image_url: str = body.get("image_url", "")
+    file_url: str = body.get("file_url", "")
+    import_type: str = body.get("import_type", "")
+    org_id: str = body.get("org_id", "org_default")
+    store_id: str = body.get("store_id", "")
+    direct_rows: list = body.get("rows", [])
+    direct_table_type: str = body.get("table_type", "")
+
+    if not image_url and not file_url and not direct_rows:
+        raise HTTPException(status_code=400, detail="请提供 image_url、file_url 或 rows")
+
+    # 如果直接传入了 rows（确认导入步骤），跳过识别
+    if direct_rows:
+        table_type: str = direct_table_type or import_type or "products"
+        rows: list = direct_rows
+        result: Dict[str, Any] = {
+            "success": True,
+            "table_type": table_type,
+            "row_count": len(rows),
+            "rows": rows,
+            "imported": 0
+        }
+    else:
+        # ===== 识别流程 =====
+        try:
+            from coze_coding_dev_sdk import LLMClient
+            from langchain_core.messages import SystemMessage, HumanMessage
+
+            # 1. 读取文件内容（如果是文档类型）
+            text_content: str = ""
+            if file_url:
+                from utils.file.file import File, FileOps
+                f = File(url=file_url)
+                try:
+                    text_content = FileOps.extract_text(f)
+                except Exception as ex:
+                    logger.warning(f"文件提取失败: {ex}")
+
+            # 2. 构造多模态消息
+            system_prompt: str = """你是服装连锁店的表格识别专家。用户会上传一张表格图片或一段表格文本，你需要精确识别其中所有数据。
+
+**识别规则**：
+1. 仔细识别表格中每一行每一列的数据，不要遗漏
+2. 数字字段不要带单位符号（如¥、元、件等），只保留纯数字
+3. 如果某列数据缺失，用 null 表示
+4. 保持原始数据的精确性，不要四舍五入或估算
+
+**输出格式**：严格返回JSON，不要包含任何其他文字说明：
+
+如果表格是商品清单（含SKU/品名/进价/售价/库存等）：
+```json
+{
+  "table_type": "products",
+  "rows": [
+    {"sku": "SKU001", "name": "红色连衣裙", "category": "连衣裙", "cost_price": 120, "sale_price": 299, "stock": 50},
+    {"sku": "SKU002", "name": "白色T恤", "category": "T恤", "cost_price": 45, "sale_price": 129, "stock": 200}
+  ]
+}
+```
+
+如果表格是进销存记录（含日期/品名/数量/金额/类型等）：
+```json
+{
+  "table_type": "records",
+  "rows": [
+    {"date": "2025-05-20", "type": "revenue", "name": "红色连衣裙", "category": "连衣裙", "quantity": 3, "amount": 897, "store_name": "中山路店"},
+    {"date": "2025-05-20", "type": "purchase", "name": "白色T恤", "category": "T恤", "quantity": 50, "amount": 2250, "store_name": "中山路店"}
+  ]
+}
+```
+
+如果无法判断类型，优先按商品清单输出。"""
+
+            user_parts: list = []
+            file_hint: str = ""
+            if text_content:
+                truncated: str = text_content[:3000]
+                file_hint = f"\n\n以下是提取的文件文本内容：\n{truncated}"
+
+            user_parts.append({
+                "type": "text",
+                "text": f"请识别这个表格中的所有数据，返回结构化JSON。{file_hint}"
+            })
+
+            if image_url:
+                user_parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": image_url}
+                })
+
+            client = LLMClient()
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_parts)
+            ]
+
+            response = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: client.invoke(
+                        messages=messages,
+                        model="doubao-seed-1-8-251228",
+                        temperature=0.1,
+                        max_completion_tokens=8192
+                    )
+                ),
+                timeout=60.0
+            )
+
+            # 3. 解析大模型返回
+            raw_content = response.content
+            if isinstance(raw_content, list):
+                text_parts: list = []
+                for item in raw_content:
+                    if isinstance(item, dict) and item.get("type") == "text":
+                        text_parts.append(item.get("text", ""))
+                    elif isinstance(item, str):
+                        text_parts.append(item)
+                raw_content = " ".join(text_parts)
+
+            raw_content = str(raw_content).strip()
+
+            # 提取JSON（可能被markdown代码块包裹）
+            json_match = _re.search(r'```(?:json)?\s*([\s\S]*?)```', raw_content)
+            if json_match:
+                json_str: str = json_match.group(1).strip()
+            else:
+                json_str = raw_content
+
+            table_data: dict = json.loads(json_str)
+            table_type = table_data.get("table_type", "products")
+            rows = table_data.get("rows", [])
+
+            result = {
+                "success": True,
+                "table_type": table_type,
+                "row_count": len(rows),
+                "rows": rows,
+                "imported": 0
+            }
+
+        except json.JSONDecodeError as e:
+            logger.error(f"表格识别JSON解析失败: {e}")
+            return {"success": False, "error": f"识别结果解析失败: {str(e)}", "raw": raw_content[:500] if 'raw_content' in dir() else ""}
+        except asyncio.TimeoutError:
+            return {"success": False, "error": "识别超时，请重试"}
+        except Exception as e:
+            logger.error(f"表格识别失败: {e}")
+            return {"success": False, "error": str(e)}
+
+    # ===== 自动导入到数据库 =====
+    if import_type and rows:
+        from storage.database import repository as repo
+
+        imported_count: int = 0
+        for row in rows:
+            try:
+                if import_type == "products" or table_type == "products":
+                    await repo.insert_product({
+                        "org_id": org_id,
+                        "sku": row.get("sku", ""),
+                        "name": row.get("name", ""),
+                        "category": row.get("category", "其他"),
+                        "cost_price": float(row.get("cost_price", 0) or 0),
+                        "sale_price": float(row.get("sale_price", 0) or 0),
+                        "stock": int(row.get("stock", 0) or 0),
+                    })
+                    imported_count += 1
+                elif import_type == "records" or table_type == "records":
+                    items: list = [{
+                        "name": row.get("name", ""),
+                        "quantity": int(row.get("quantity", 1) or 1),
+                        "amount": float(row.get("amount", 0) or 0),
+                        "category": row.get("category", ""),
+                    }]
+                    await repo.insert_record({
+                        "id": f"rec_{uuid.uuid4().hex[:12]}",
+                        "org_id": org_id,
+                        "store_id": store_id or "store_001",
+                        "store_name": row.get("store_name", ""),
+                        "type": row.get("type", "revenue"),
+                        "category": row.get("category", ""),
+                        "items": items,
+                        "total_amount": float(row.get("amount", 0) or 0),
+                        "status": "pending",
+                        "operator": "表格导入",
+                    })
+                    imported_count += 1
+            except Exception as ex:
+                logger.warning(f"导入行失败: {ex}, row={row}")
+
+        result["imported"] = imported_count
+
+    return result
+
+
 # ==================== 商品知识库API ====================
 
 @app.get("/api/products/search")

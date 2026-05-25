@@ -207,6 +207,7 @@
         
         <div class="search-bar">
             <input type="text" id="searchInput" placeholder="搜款号、商品名、类目..." onkeyup="filterProducts()">
+            <button class="btn btn-primary" onclick="openRecognizeModal()">📷 拍照识别</button>
             <button class="btn btn-secondary" onclick="exportProducts()">导出</button>
             <button class="btn btn-secondary" onclick="importProducts()">导入</button>
         </div>
@@ -286,7 +287,45 @@
             </form>
         </div>
     </div>
-    
+    </div>
+
+    <!-- 表格识别模态框 -->
+    <div class="modal-overlay" id="recognizeModal">
+        <div class="modal" style="max-width: 600px;">
+            <h3>📷 表格识别导入</h3>
+            <p style="color:rgba(255,255,255,0.6); margin-bottom:20px; font-size:14px;">
+                拍摄或上传商品表格/进货单图片，AI自动识别并导入商品库
+            </p>
+            
+            <div class="form-group">
+                <label>上传表格图片</label>
+                <input type="file" id="recognizeFile" accept="image/*,.pdf" 
+                       style="padding:10px; border:2px dashed rgba(255,255,255,0.2); border-radius:10px; cursor:pointer;">
+            </div>
+            
+            <div id="recognizePreview" style="display:none; margin:15px 0;">
+                <img id="previewImg" style="max-width:100%; max-height:200px; border-radius:8px; border:1px solid rgba(255,255,255,0.1);">
+            </div>
+
+            <div class="form-group">
+                <label>导入类型</label>
+                <select id="recognizeImportType" style="width:100%; padding:12px; border:1px solid rgba(255,255,255,0.2); border-radius:8px; background:rgba(255,255,255,0.05); color:white; font-size:14px;">
+                    <option value="products">商品清单（SKU/品名/进价/售价/库存）</option>
+                    <option value="records">进销存记录（日期/品名/数量/金额/类型）</option>
+                </select>
+            </div>
+
+            <div id="recognizeResult" style="display:none; margin:15px 0; padding:15px; background:rgba(255,255,255,0.05); border-radius:10px; max-height:300px; overflow-y:auto;">
+            </div>
+
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" onclick="closeRecognizeModal()">取消</button>
+                <button type="button" id="recognizeBtn" class="btn btn-primary" onclick="recognizeTable()">🔍 识别</button>
+                <button type="button" id="importBtn" class="btn btn-primary" style="display:none;" onclick="confirmImport()">✅ 确认导入</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let products = [];
         const token = localStorage.getItem('token');
@@ -536,6 +575,159 @@
         
         // 初始化
         loadProducts();
+
+        // ==================== 表格识别功能 ====================
+        let recognizedRows = [];
+        let recognizedType = '';
+
+        function openRecognizeModal() {
+            document.getElementById('recognizeModal').classList.add('show');
+            document.getElementById('recognizeResult').style.display = 'none';
+            document.getElementById('importBtn').style.display = 'none';
+            document.getElementById('recognizeBtn').style.display = '';
+            document.getElementById('recognizeBtn').disabled = false;
+            document.getElementById('recognizeBtn').textContent = '🔍 识别';
+            recognizedRows = [];
+        }
+
+        function closeRecognizeModal() {
+            document.getElementById('recognizeModal').classList.remove('show');
+        }
+
+        // 图片预览
+        document.getElementById('recognizeFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                document.getElementById('previewImg').src = ev.target.result;
+                document.getElementById('recognizePreview').style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        });
+
+        async function recognizeTable() {
+            const fileInput = document.getElementById('recognizeFile');
+            if (!fileInput.files || !fileInput.files[0]) {
+                alert('请先选择图片文件');
+                return;
+            }
+
+            const btn = document.getElementById('recognizeBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 识别中...';
+
+            try {
+                // 1. 上传图片
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+
+                const uploadResp = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                const uploadData = await uploadResp.json();
+
+                if (!uploadData.url) {
+                    throw new Error('图片上传失败');
+                }
+
+                // 2. 调用表格识别API
+                const importType = document.getElementById('recognizeImportType').value;
+                const resp = await fetch('/api/table/recognize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        image_url: uploadData.url,
+                        import_type: importType,
+                        org_id: 'org_default'
+                    })
+                });
+
+                const result = await resp.json();
+
+                if (!result.success) {
+                    throw new Error(result.error || '识别失败');
+                }
+
+                // 3. 展示识别结果
+                recognizedRows = result.rows || [];
+                recognizedType = result.table_type || importType;
+
+                const resultDiv = document.getElementById('recognizeResult');
+                resultDiv.style.display = 'block';
+
+                let html = `<div style="margin-bottom:10px; color:#4caf50; font-weight:bold;">
+                    ✅ 识别成功！共 ${result.row_count} 行数据（类型：${recognizedType === 'products' ? '商品清单' : '进销存记录'}）
+                </div>`;
+
+                // 渲染预览表格
+                if (recognizedRows.length > 0) {
+                    const cols = Object.keys(recognizedRows[0]);
+                    html += '<table style="width:100%; font-size:12px; border-collapse:collapse;">';
+                    html += '<tr>' + cols.map(c => `<th style="padding:6px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05);">${c}</th>`).join('') + '</tr>';
+                    for (const row of recognizedRows) {
+                        html += '<tr>' + cols.map(c => `<td style="padding:6px; border:1px solid rgba(255,255,255,0.1);">${row[c] ?? ''}</td>`).join('') + '</tr>';
+                    }
+                    html += '</table>';
+                }
+
+                resultDiv.innerHTML = html;
+
+                // 显示确认导入按钮
+                document.getElementById('importBtn').style.display = '';
+                btn.textContent = '🔍 重新识别';
+                btn.disabled = false;
+
+            } catch (error) {
+                alert('识别失败：' + error.message);
+                btn.textContent = '🔍 识别';
+                btn.disabled = false;
+            }
+        }
+
+        async function confirmImport() {
+            if (recognizedRows.length === 0) return;
+
+            const importBtn = document.getElementById('importBtn');
+            importBtn.disabled = true;
+            importBtn.textContent = '⏳ 导入中...';
+
+            try {
+                const importType = document.getElementById('recognizeImportType').value;
+                const resp = await fetch('/api/table/recognize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        import_type: importType,
+                        rows: recognizedRows,
+                        table_type: recognizedType,
+                        org_id: 'org_default'
+                    })
+                });
+
+                const result = await resp.json();
+
+                if (result.success) {
+                    alert(`导入成功！共导入 ${result.imported} 条数据`);
+                    closeRecognizeModal();
+                    await loadProducts();
+                } else {
+                    throw new Error(result.error || '导入失败');
+                }
+            } catch (error) {
+                alert('导入失败：' + error.message);
+                importBtn.textContent = '✅ 确认导入';
+                importBtn.disabled = false;
+            }
+        }
     </script>
 </body>
 </html>
