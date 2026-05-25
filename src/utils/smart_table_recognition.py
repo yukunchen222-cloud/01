@@ -329,3 +329,85 @@ async def analyze_product_relations(items: List[Dict]) -> List[Dict]:
     except Exception as e:
         logger.error(f"连带关系分析失败: {e}")
         return []
+
+
+async def recognize_text_table_with_llm(table_text: str, table_type: str = "auto") -> Dict[str, Any]:
+    """
+    使用大模型识别Markdown格式的表格文本
+    
+    Args:
+        table_text: Markdown格式的表格文本
+        table_type: 表格类型 (auto/products/purchase/sales)
+    
+    Returns:
+        识别结果字典
+    """
+    try:
+        client = LLMClient()
+        
+        # 使用简洁明确的提示词
+        sp = """你是一个表格数据提取专家。请从表格中提取商品信息，直接输出JSON格式。
+
+字段映射：
+- 款号/货号/SKU → sku
+- 商品名称/品名 → name  
+- 类目/分类 → category
+- 进价/成本价 → cost_price
+- 售价/零售价 → sale_price
+- 库存/数量 → stock
+
+输出格式（只要JSON，不要其他内容）：
+{"type":"products","items":[{"sku":"款号","name":"名称","category":"类目","cost_price":0,"sale_price":0,"stock":0}],"relations":[]}
+
+注意：数字不要加引号，只输出JSON不要输出其他内容。"""
+        
+        # 构建消息
+        messages = [
+            SystemMessage(content=sp),
+            HumanMessage(content=f"表格数据：\n{table_text}")
+        ]
+        
+        # 调用大模型
+        response = client.invoke(
+            messages=messages,
+            model="doubao-seed-1-8-251228",
+            temperature=0.1
+        )
+        
+        # 提取文本内容
+        text_content = get_text_content(response.content)
+        logger.info(f"大模型返回内容: {text_content}")
+        
+        # 清理文本，移除可能的markdown代码块标记
+        text_content = text_content.strip()
+        if text_content.startswith("```"):
+            # 移除代码块标记
+            lines = text_content.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text_content = "\n".join(lines).strip()
+        
+        # 解析JSON
+        json_start = text_content.find("{")
+        json_end = text_content.rfind("}") + 1
+        
+        if json_start >= 0 and json_end > json_start:
+            json_str = text_content[json_start:json_end]
+            result = json.loads(json_str)
+            result["success"] = True
+            return result
+        else:
+            return {
+                "success": False,
+                "error": "无法从响应中提取JSON",
+                "raw_response": text_content
+            }
+            
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON解析失败: {e}, 原始内容: {text_content if 'text_content' in dir() else 'N/A'}")
+        return {"success": False, "error": f"JSON解析失败: {str(e)}"}
+    except Exception as e:
+        logger.error(f"表格文本识别失败: {e}")
+        return {"success": False, "error": str(e)}

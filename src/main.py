@@ -2140,6 +2140,7 @@ async def smart_recognize_table(request: Request):
     - image_url: 图片URL
     - image_base64: 图片base64编码
     - file_content: Excel/CSV文件base64编码
+    - table_text: Markdown格式的表格文本（前端解析Excel后传入）
     - filename: 文件名（用于判断文件类型）
     - table_type: 表格类型 (auto/products/purchase/sales)
     - import_after: 是否识别后自动导入 (默认false，只返回结果)
@@ -2151,6 +2152,7 @@ async def smart_recognize_table(request: Request):
     image_url: str = body.get("image_url", "")
     image_base64: str = body.get("image_base64", "")
     file_content: str = body.get("file_content", "")  # base64编码的文件内容
+    table_text: str = body.get("table_text", "")  # Markdown格式的表格文本
     filename: str = body.get("filename", "")
     table_type: str = body.get("table_type", "auto")
     import_after: bool = body.get("import_after", False)
@@ -2159,6 +2161,7 @@ async def smart_recognize_table(request: Request):
     from utils.smart_table_recognition import (
         recognize_table_with_llm,
         recognize_excel_with_llm,
+        recognize_text_table_with_llm,
         analyze_product_relations
     )
     
@@ -2177,14 +2180,18 @@ async def smart_recognize_table(request: Request):
                 table_type=table_type
             )
         
-        # 2. 处理Excel/CSV文件
+        # 2. 处理Markdown表格文本（前端解析Excel后传入）
+        elif table_text:
+            result = await recognize_text_table_with_llm(table_text, table_type)
+        
+        # 3. 处理Excel/CSV文件（base64编码）
         elif file_content:
             # 解码base64文件内容
             file_bytes = b64.b64decode(file_content)
             result = await recognize_excel_with_llm(file_bytes, filename)
         
         else:
-            return {"success": False, "error": "请提供 image_url、image_base64 或 file_content"}
+            return {"success": False, "error": "请提供 image_url、image_base64、file_content 或 table_text"}
         
         # 3. 分析连带关系
         if result.get("success") and analyze_relations and result.get("items"):
