@@ -405,6 +405,8 @@
             <button class="btn btn-outline" onclick="importProducts()">📥 Excel导入</button>
             <button class="btn btn-outline" onclick="exportProducts()">📤 导出</button>
             <button class="btn btn-outline" onclick="location.reload()">🔄 刷新</button>
+            <div class="toolbar-divider"></div>
+            <button class="btn btn-danger" id="batchDeleteBtn" style="display:none;" onclick="batchDelete()">🗑️ 批量删除 (<span id="selectedCount">0</span>)</button>
         </div>
 
         <!-- 商品表格 -->
@@ -417,6 +419,7 @@
                 <table>
                     <thead>
                         <tr>
+                            <th style="width:40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)"></th>
                             <th>款号</th>
                             <th>商品名称</th>
                             <th>类目</th>
@@ -668,6 +671,7 @@
                 else { statusClass = 'stock-ok'; statusText = '正常'; }
 
                 return '<tr>' +
+                    '<td><input type="checkbox" class="row-checkbox" data-id="' + (p.product_id || p.sku) + '" onchange="updateSelectedCount()"></td>' +
                     '<td><span class="sku-tag">' + (p.sku || '-') + '</span></td>' +
                     '<td><strong>' + (p.name || '-') + '</strong></td>' +
                     '<td><span class="category-tag">' + (p.category || '-') + '</span></td>' +
@@ -826,6 +830,63 @@
                 }
             };
             input.click();
+        }
+
+        /* 批量删除功能 */
+        function toggleSelectAll(checked) {
+            var checkboxes = document.querySelectorAll('.row-checkbox');
+            checkboxes.forEach(function(cb) { cb.checked = checked; });
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            var checked = document.querySelectorAll('.row-checkbox:checked');
+            var count = checked.length;
+            var btn = document.getElementById('batchDeleteBtn');
+            document.getElementById('selectedCount').textContent = count;
+            btn.style.display = count > 0 ? 'inline-flex' : 'none';
+            
+            // 更新全选状态
+            var all = document.querySelectorAll('.row-checkbox');
+            document.getElementById('selectAll').checked = count > 0 && count === all.length;
+        }
+
+        async function batchDelete() {
+            var checkboxes = document.querySelectorAll('.row-checkbox:checked');
+            if (checkboxes.length === 0) {
+                alert('请先选择要删除的商品');
+                return;
+            }
+            
+            var ids = [];
+            checkboxes.forEach(function(cb) { ids.push(cb.dataset.id); });
+            
+            if (!confirm('确定要删除选中的 ' + ids.length + ' 个商品吗？此操作不可恢复！')) {
+                return;
+            }
+            
+            var token = localStorage.getItem('token');
+            try {
+                var resp = await fetch('/api/products/batch-delete', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token 
+                    },
+                    body: JSON.stringify({ product_ids: ids })
+                });
+                
+                var result = await resp.json();
+                
+                if (result.success) {
+                    alert('成功删除 ' + result.deleted_count + ' 个商品');
+                    await loadProducts();
+                } else {
+                    alert('删除失败：' + result.message);
+                }
+            } catch (error) {
+                alert('删除失败：' + error.message);
+            }
         }
 
         /* ========== AI表格识别 ========== */

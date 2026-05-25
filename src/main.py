@@ -1421,6 +1421,29 @@ async def delete_product_api(product_id: str):
         return {"success": False, "message": str(e)}
 
 
+@app.post("/api/products/batch-delete")
+async def batch_delete_products_api(request: Request):
+    """批量删除商品"""
+    try:
+        data = await request.json()
+        product_ids = data.get("product_ids", [])
+        
+        if not product_ids or not isinstance(product_ids, list):
+            return {"success": False, "message": "请提供要删除的商品ID列表"}
+        
+        deleted_count = 0
+        for pid in product_ids:
+            if await repo.delete_product(pid):
+                deleted_count += 1
+        
+        logger.info(f"批量删除商品: 请求{len(product_ids)}个, 成功{deleted_count}个")
+        return {"success": True, "deleted_count": deleted_count, "message": f"成功删除 {deleted_count} 个商品"}
+        
+    except Exception as e:
+        logger.error(f"批量删除商品失败: {e}")
+        return {"success": False, "message": str(e)}
+
+
 @app.post("/api/products/import")
 async def import_products_api(request: Request):
     """批量导入商品（Excel文件）"""
