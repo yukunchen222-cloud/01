@@ -349,6 +349,8 @@
             .form-row { grid-template-columns: 1fr; }
         }
     </style>
+    <!-- SheetJS: 前端解析Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
     <!-- 顶部导航 -->
@@ -786,25 +788,48 @@
             btn.textContent = '⏳ 识别中...';
 
             try {
-                // 1. 上传文件
-                var formData = new FormData();
-                formData.append('file', file);
-                var uploadResp = await fetch('/api/upload', {
-                    method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + token },
-                    body: formData
-                });
-                var uploadData = await uploadResp.json();
-                if (!uploadData.url) throw new Error('文件上传失败');
-
-                // 2. 调用识别API - 根据文件类型选择参数
                 var importType = document.getElementById('recognizeImportType').value;
                 var requestBody = { import_type: importType, org_id: 'org_default' };
-                
-                if (isImage) {
+
+                if (isExcel && typeof XLSX !== 'undefined') {
+                    // ===== Excel文件：前端解析 =====
+                    var arrayBuffer = await file.arrayBuffer();
+                    var workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                    var sheetName = workbook.SheetNames[0];
+                    var worksheet = workbook.Sheets[sheetName];
+                    var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    
+                    if (jsonData.length < 2) throw new Error('Excel数据不足');
+                    
+                    // 第一行作为表头，后面是数据
+                    var headers = jsonData[0];
+                    var rows = [];
+                    for (var i = 1; i < jsonData.length; i++) {
+                        var row = {};
+                        for (var j = 0; j < headers.length; j++) {
+                            row[headers[j]] = jsonData[i][j];
+                        }
+                        rows.push(row);
+                    }
+                    
+                    // 发送解析后的数据给后端识别
+                    requestBody.table_text = JSON.stringify(rows, null, 2);
+                    requestBody.table_type = importType;
+                    
+                } else if (isImage) {
+                    // ===== 图片：上传后识别 =====
+                    var formData = new FormData();
+                    formData.append('file', file);
+                    var uploadResp = await fetch('/api/upload', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + token },
+                        body: formData
+                    });
+                    var uploadData = await uploadResp.json();
+                    if (!uploadData.url) throw new Error('图片上传失败');
                     requestBody.image_url = uploadData.url;
                 } else {
-                    requestBody.file_url = uploadData.url;
+                    throw new Error('不支持的文件格式，请上传图片或Excel文件');
                 }
                 
                 var resp = await fetch('/api/table/recognize', {
@@ -815,7 +840,7 @@
                 var result = await resp.json();
                 if (!result.success) throw new Error(result.error || '识别失败');
 
-                // 3. 展示结果
+                // 展示结果
                 recognizedRows = result.rows || [];
                 recognizedType = result.table_type || importType;
 

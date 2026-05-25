@@ -1656,6 +1656,7 @@ async def recognize_table(request: Request):
     请求体:
     - image_url: 图片URL（拍照/截图的表格）
     - file_url:  文件URL（Excel/PDF等）
+    - table_text: 表格文本（前端解析Excel后的JSON字符串）
     - import_type: 导入类型 "products"(商品) | "records"(记录)，空则只识别不导入
     - org_id: 组织ID
     - store_id: 门店ID（records导入时需要）
@@ -1668,14 +1669,15 @@ async def recognize_table(request: Request):
     body = await request.json()
     image_url: str = body.get("image_url", "")
     file_url: str = body.get("file_url", "")
+    table_text: str = body.get("table_text", "")
     import_type: str = body.get("import_type", "")
     org_id: str = body.get("org_id", "org_default")
     store_id: str = body.get("store_id", "")
     direct_rows: list = body.get("rows", [])
     direct_table_type: str = body.get("table_type", "")
 
-    if not image_url and not file_url and not direct_rows:
-        raise HTTPException(status_code=400, detail="请提供 image_url、file_url 或 rows")
+    if not image_url and not file_url and not table_text and not direct_rows:
+        raise HTTPException(status_code=400, detail="请提供 image_url、file_url、table_text 或 rows")
 
     # 如果直接传入了 rows（确认导入步骤），跳过识别
     if direct_rows:
@@ -1748,6 +1750,10 @@ async def recognize_table(request: Request):
                         text_content = FileOps.extract_text(f)
                     except Exception as ex:
                         logger.warning(f"文件提取失败: {ex}")
+
+            # 1.5 处理前端传来的已解析表格文本
+            if table_text and not text_content:
+                text_content = f"表格数据（JSON格式）：\n{table_text}"
 
             # 2. 构造多模态消息
             system_prompt: str = """你是服装连锁店的表格识别专家。用户会上传一张表格图片或一段表格文本，你需要精确识别其中所有数据。
