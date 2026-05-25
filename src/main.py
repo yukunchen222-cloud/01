@@ -1372,6 +1372,9 @@ async def create_product_api(request: Request):
         if payload:
             org_id = payload.get("org_id", org_id)
     
+    # 读取 merge_duplicates 查询参数
+    merge_duplicates = request.query_params.get("merge_duplicates", "false").lower() == "true"
+    
     try:
         data = await request.json()
         product = await repo.insert_product({
@@ -1379,10 +1382,10 @@ async def create_product_api(request: Request):
             "sku": data.get("sku", ""),
             "name": data.get("name", ""),
             "category": data.get("category", ""),
-            "cost_price": float(data.get("cost_price", 0)),
-            "sale_price": float(data.get("sale_price", 0)),
-            "stock": int(data.get("stock", 0))
-        })
+            "cost_price": float(data.get("cost_price", 0) or 0),
+            "sale_price": float(data.get("sale_price", 0) or 0),
+            "stock": int(data.get("stock", 0) or 0)
+        }, merge_duplicate_sku=merge_duplicates)
         return {"success": True, "product": product}
     except Exception as e:
         logger.error(f"创建商品失败: {e}")

@@ -800,6 +800,7 @@
             input.onchange = async function(e) {
                 var file = e.target.files[0];
                 if (!file) return;
+                var token = localStorage.getItem('token');
                 try {
                     var data = await file.arrayBuffer();
                     var workbook = XLSX.read(data, { type: 'array' });
