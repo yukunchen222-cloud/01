@@ -1694,24 +1694,70 @@ async def recognize_table(request: Request):
             from coze_coding_dev_sdk import LLMClient
             from langchain_core.messages import SystemMessage, HumanMessage
 
-            # 1. 读取文件内容（如果是文档类型）
+            # 1. 读取文件内容（根据文件类型选择解析方式）
             text_content: str = ""
+            table_markdown: str = ""
+            
             if file_url:
-                from utils.file.file import File, FileOps
-                f = File(url=file_url)
-                try:
-                    text_content = FileOps.extract_text(f)
-                except Exception as ex:
-                    logger.warning(f"文件提取失败: {ex}")
+                # 判断文件类型
+                file_lower = file_url.lower()
+                is_excel = file_lower.endswith('.xlsx') or file_lower.endswith('.xls') or file_lower.endswith('.csv')
+                
+                if is_excel:
+                    # Excel/CSV 文件：用 pandas 解析成 Markdown 表格
+                    try:
+                        import pandas as pd
+                        import tempfile
+                        import os
+                        import requests
+                        
+                        # 下载文件到临时目录
+                        resp = requests.get(file_url, timeout=30)
+                        resp.raise_for_status()
+                        
+                        suffix = '.xlsx' if file_lower.endswith('.xlsx') else '.xls' if file_lower.endswith('.xls') else '.csv'
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                            tmp.write(resp.content)
+                            tmp_path = tmp.name
+                        
+                        try:
+                            if suffix == '.csv':
+                                df = pd.read_csv(tmp_path, encoding='utf-8-sig')
+                            else:
+                                df = pd.read_excel(tmp_path, engine='openpyxl' if suffix == '.xlsx' else 'xlrd')
+                            
+                            # 转成 Markdown 表格
+                            table_markdown = df.to_markdown(index=False, tablefmt='pipe')
+                            text_content = f"Excel表格内容（{len(df)}行 x {len(df.columns)}列）：\n\n{table_markdown}"
+                            logger.info(f"Excel解析成功: {len(df)}行, 列: {list(df.columns)}")
+                        finally:
+                            os.unlink(tmp_path)
+                    except Exception as ex:
+                        logger.warning(f"Excel解析失败，尝试文本提取: {ex}")
+                        from utils.file.file import File, FileOps
+                        f = File(url=file_url)
+                        try:
+                            text_content = FileOps.extract_text(f)
+                        except Exception as ex2:
+                            logger.error(f"文件提取也失败: {ex2}")
+                else:
+                    # 非Excel文件（PDF等）：用文本提取
+                    from utils.file.file import File, FileOps
+                    f = File(url=file_url)
+                    try:
+                        text_content = FileOps.extract_text(f)
+                    except Exception as ex:
+                        logger.warning(f"文件提取失败: {ex}")
 
             # 2. 构造多模态消息
             system_prompt: str = """你是服装连锁店的表格识别专家。用户会上传一张表格图片或一段表格文本，你需要精确识别其中所有数据。
 
 **识别规则**：
-1. 仔细识别表格中每一行每一列的数据，不要遗漏
+1. 仔细识别表格中每一行每一列的数据，不要遗漏任何一行
 2. 数字字段不要带单位符号（如¥、元、件等），只保留纯数字
 3. 如果某列数据缺失，用 null 表示
 4. 保持原始数据的精确性，不要四舍五入或估算
+5. 如果表头是中文，请根据含义映射到对应字段
 
 **输出格式**：严格返回JSON，不要包含任何其他文字说明：
 

@@ -494,9 +494,9 @@
             <div class="modal-body">
                 <div class="recognize-upload-area" onclick="document.getElementById('recognizeFile').click()">
                     <div class="upload-icon">📄</div>
-                    <div class="upload-text">点击上传表格图片或PDF</div>
-                    <div class="upload-hint">支持 JPG/PNG/PDF 格式</div>
-                    <input type="file" id="recognizeFile" accept="image/*,.pdf" style="display:none;">
+                    <div class="upload-text">点击上传表格图片或Excel文件</div>
+                    <div class="upload-hint">支持 JPG/PNG/PDF/XLSX/XLS/CSV 格式</div>
+                    <input type="file" id="recognizeFile" accept="image/*,.pdf,.xlsx,.xls,.csv" style="display:none;">
                 </div>
 
                 <div id="recognizePreview" style="display:none; text-align:center;">
@@ -772,32 +772,45 @@
         async function recognizeTable() {
             var fileInput = document.getElementById('recognizeFile');
             if (!fileInput.files || !fileInput.files[0]) {
-                alert('请先选择图片或PDF文件');
+                alert('请先选择文件');
                 return;
             }
+
+            var file = fileInput.files[0];
+            var fileName = file.name.toLowerCase();
+            var isImage = fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png') || fileName.endsWith('.gif') || fileName.endsWith('.webp');
+            var isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv');
 
             var btn = document.getElementById('recognizeBtn');
             btn.disabled = true;
             btn.textContent = '⏳ 识别中...';
 
             try {
-                // 1. 上传图片
+                // 1. 上传文件
                 var formData = new FormData();
-                formData.append('file', fileInput.files[0]);
+                formData.append('file', file);
                 var uploadResp = await fetch('/api/upload', {
                     method: 'POST',
                     headers: { 'Authorization': 'Bearer ' + token },
                     body: formData
                 });
                 var uploadData = await uploadResp.json();
-                if (!uploadData.url) throw new Error('图片上传失败');
+                if (!uploadData.url) throw new Error('文件上传失败');
 
-                // 2. 调用识别API
+                // 2. 调用识别API - 根据文件类型选择参数
                 var importType = document.getElementById('recognizeImportType').value;
+                var requestBody = { import_type: importType, org_id: 'org_default' };
+                
+                if (isImage) {
+                    requestBody.image_url = uploadData.url;
+                } else {
+                    requestBody.file_url = uploadData.url;
+                }
+                
                 var resp = await fetch('/api/table/recognize', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify({ image_url: uploadData.url, import_type: importType, org_id: 'org_default' })
+                    body: JSON.stringify(requestBody)
                 });
                 var result = await resp.json();
                 if (!result.success) throw new Error(result.error || '识别失败');
