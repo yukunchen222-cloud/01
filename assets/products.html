@@ -7,321 +7,516 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #f0f2f5;
             min-height: 100vh;
-            color: white;
+            color: #333;
         }
-        
-        .container { padding: 20px; max-width: 1200px; margin: 0 auto; }
-        
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-        }
-        
-        .header h1 { font-size: 28px; }
-        
-        .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s;
-        }
-        
-        .btn-primary {
+
+        /* 顶部导航 */
+        .top-nav {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        
-        .btn-secondary {
-            background: rgba(255,255,255,0.1);
-            color: white;
-        }
-        
-        .search-bar {
+            padding: 16px 24px;
             display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
+            align-items: center;
+            gap: 16px;
         }
-        
-        .search-bar input {
-            flex: 1;
-            padding: 12px 16px;
-            border: none;
-            border-radius: 8px;
-            background: rgba(255,255,255,0.1);
-            color: white;
+        .top-nav a {
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
             font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
-        
-        .search-bar input::placeholder { color: rgba(255,255,255,0.5); }
-        
+        .top-nav a:hover { color: #fff; }
+        .top-nav h1 {
+            color: #fff;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .container { padding: 24px; max-width: 1200px; margin: 0 auto; }
+
+        /* 统计卡片 */
         .stats-row {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin-bottom: 30px;
+            gap: 16px;
+            margin-bottom: 24px;
         }
-        
         .stat-card {
-            background: rgba(255,255,255,0.05);
+            background: #fff;
             border-radius: 12px;
             padding: 20px;
-            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
         }
-        
-        .stat-value { font-size: 28px; font-weight: 700; }
-        .stat-label { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 5px; }
-        
-        .table-container {
-            background: rgba(255,255,255,0.05);
-            border-radius: 16px;
+        .stat-card .stat-icon {
+            width: 40px; height: 40px;
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+        .stat-card:nth-child(1) .stat-icon { background: #e8f0fe; }
+        .stat-card:nth-child(2) .stat-icon { background: #e6f4ea; }
+        .stat-card:nth-child(3) .stat-icon { background: #fef7e0; }
+        .stat-card:nth-child(4) .stat-icon { background: #fce8e6; }
+        .stat-value { font-size: 28px; font-weight: 700; color: #1a1a2e; }
+        .stat-label { font-size: 13px; color: #888; margin-top: 4px; }
+
+        /* 工具栏 */
+        .toolbar {
+            background: #fff;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .toolbar .search-input {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 16px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .toolbar .search-input:focus { border-color: #667eea; }
+
+        .btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .btn-primary { background: #667eea; color: #fff; }
+        .btn-primary:hover { background: #5a6fd6; }
+        .btn-success { background: #4caf50; color: #fff; }
+        .btn-success:hover { background: #43a047; }
+        .btn-outline {
+            background: #fff;
+            color: #555;
+            border: 1px solid #ddd;
+        }
+        .btn-outline:hover { background: #f5f5f5; }
+        .btn-danger { background: #fff; color: #e53935; border: 1px solid #ffcdd2; }
+        .btn-danger:hover { background: #fce8e6; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+        .toolbar-divider {
+            width: 1px;
+            height: 28px;
+            background: #e0e0e0;
+        }
+
+        /* 表格 */
+        .table-card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
             overflow: hidden;
         }
-        
+        .table-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .table-header h3 { font-size: 16px; font-weight: 600; }
+        .table-header .count { font-size: 13px; color: #888; }
+
         table { width: 100%; border-collapse: collapse; }
-        
-        th, td { padding: 15px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); }
-        
-        th { background: rgba(255,255,255,0.05); font-weight: 500; color: rgba(255,255,255,0.7); }
-        
-        tr:hover { background: rgba(255,255,255,0.03); }
-        
-        .status-badge {
+        th {
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: #fafafa;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        td {
+            padding: 14px 16px;
+            font-size: 14px;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        tr:hover { background: #f8f9ff; }
+
+        .sku-tag {
             display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
+            padding: 2px 8px;
+            background: #e8f0fe;
+            color: #667eea;
+            border-radius: 4px;
             font-size: 12px;
+            font-weight: 600;
         }
-        
-        .status-active { background: #4caf50; }
-        .status-low { background: #ff9800; }
-        .status-out { background: #f44336; }
-        
-        .actions { display: flex; gap: 8px; }
-        
-        .action-btn {
-            padding: 6px 12px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
+        .category-tag {
+            display: inline-block;
+            padding: 2px 10px;
+            background: #f0f0f0;
+            border-radius: 12px;
             font-size: 12px;
-            background: rgba(255,255,255,0.1);
-            color: white;
+            color: #555;
         }
-        
-        .action-btn:hover { background: rgba(255,255,255,0.2); }
-        
+        .price { font-weight: 600; color: #1a1a2e; }
+        .cost-price { color: #888; }
+
+        .stock-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .stock-ok { background: #e6f4ea; color: #2e7d32; }
+        .stock-low { background: #fff3e0; color: #e65100; }
+        .stock-out { background: #fce8e6; color: #c62828; }
+
+        .actions { display: flex; gap: 6px; }
+
+        /* 空状态 */
+        .empty-state {
+            padding: 60px 20px;
+            text-align: center;
+            color: #bbb;
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+        .empty-state .title { font-size: 16px; color: #999; margin-bottom: 8px; }
+        .empty-state .desc { font-size: 13px; }
+
         /* 模态框 */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0,0,0,0.5);
             display: none;
             align-items: center;
             justify-content: center;
             z-index: 1000;
         }
-        
         .modal-overlay.show { display: flex; }
-        
+
         .modal {
-            background: #1a1a2e;
+            background: #fff;
             border-radius: 16px;
-            padding: 30px;
+            padding: 0;
             width: 90%;
-            max-width: 500px;
+            max-width: 520px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
         }
-        
-        .modal h3 { margin-bottom: 20px; font-size: 20px; }
-        
-        .form-group { margin-bottom: 15px; }
-        
+        .modal-head {
+            padding: 20px 24px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-head h3 { font-size: 18px; font-weight: 600; color: #1a1a2e; }
+        .modal-close {
+            width: 32px; height: 32px;
+            border: none; background: #f5f5f5;
+            border-radius: 8px; cursor: pointer;
+            font-size: 18px; color: #888;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .modal-close:hover { background: #eee; }
+
+        .modal-body { padding: 24px; }
+
+        .form-group { margin-bottom: 16px; }
         .form-group label {
             display: block;
             margin-bottom: 6px;
-            font-size: 14px;
-            color: rgba(255,255,255,0.7);
+            font-size: 13px;
+            font-weight: 500;
+            color: #555;
         }
-        
+        .form-group label .required { color: #e53935; }
         .form-group input, .form-group select {
             width: 100%;
-            padding: 12px;
-            border: 1px solid rgba(255,255,255,0.2);
+            padding: 10px 14px;
+            border: 1px solid #e0e0e0;
             border-radius: 8px;
-            background: rgba(255,255,255,0.05);
-            color: white;
             font-size: 14px;
+            color: #333;
+            outline: none;
+            transition: border-color 0.2s;
         }
-        
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        
-        .modal-buttons { display: flex; gap: 10px; margin-top: 25px; }
-        .modal-buttons .btn { flex: 1; }
-        
-        .back-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            color: rgba(255,255,255,0.7);
-            text-decoration: none;
-            margin-bottom: 20px;
+        .form-group input:focus, .form-group select:focus { border-color: #667eea; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+        .modal-foot {
+            padding: 16px 24px;
+            border-top: 1px solid #f0f0f0;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
         }
-        
-        .back-btn:hover { color: white; }
+
+        /* 识别模态框 */
+        .recognize-upload-area {
+            border: 2px dashed #d0d0d0;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            margin-bottom: 16px;
+        }
+        .recognize-upload-area:hover { border-color: #667eea; }
+        .recognize-upload-area .upload-icon { font-size: 36px; margin-bottom: 8px; }
+        .recognize-upload-area .upload-text { font-size: 14px; color: #888; }
+        .recognize-upload-area .upload-hint { font-size: 12px; color: #bbb; margin-top: 4px; }
+
+        .preview-img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+
+        .recognize-result-box {
+            background: #f8f9ff;
+            border: 1px solid #e8f0fe;
+            border-radius: 10px;
+            padding: 16px;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        .recognize-result-box .result-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: #4caf50;
+            margin-bottom: 12px;
+        }
+        .recognize-result-box table {
+            width: 100%;
+            font-size: 12px;
+            border-collapse: collapse;
+        }
+        .recognize-result-box th {
+            padding: 6px 8px;
+            background: #e8f0fe;
+            font-size: 11px;
+        }
+        .recognize-result-box td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #eef;
+        }
+
+        /* 加载动画 */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+        .spinner {
+            display: inline-block;
+            width: 24px; height: 24px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .toolbar { flex-direction: column; align-items: stretch; }
+            .toolbar .search-input { min-width: auto; }
+            .toolbar-divider { display: none; }
+            .modal { width: 95%; }
+            .form-row { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
+    <!-- 顶部导航 -->
+    <div class="top-nav">
+        <a href="/">← 首页</a>
+        <h1>📦 商品库管理</h1>
+    </div>
+
     <div class="container">
-        <a href="/" class="back-btn">← 返回首页</a>
-        
-        <div class="header">
-            <h1>📦 商品库管理</h1>
-            <button class="btn btn-primary" onclick="openAddModal()">+ 添加商品</button>
-        </div>
-        
+        <!-- 统计卡片 -->
         <div class="stats-row">
             <div class="stat-card">
+                <div class="stat-icon">📦</div>
                 <div class="stat-value" id="totalProducts">0</div>
                 <div class="stat-label">商品总数</div>
             </div>
             <div class="stat-card">
+                <div class="stat-icon">📊</div>
                 <div class="stat-value" id="totalStock">0</div>
                 <div class="stat-label">库存总量</div>
             </div>
             <div class="stat-card">
+                <div class="stat-icon">⚠️</div>
                 <div class="stat-value" id="lowStockCount">0</div>
                 <div class="stat-label">库存预警</div>
             </div>
             <div class="stat-card">
+                <div class="stat-icon">💰</div>
                 <div class="stat-value" id="totalValue">¥0</div>
                 <div class="stat-label">库存金额</div>
             </div>
         </div>
-        
-        <div class="search-bar">
-            <input type="text" id="searchInput" placeholder="搜款号、商品名、类目..." onkeyup="filterProducts()">
-            <button class="btn btn-primary" onclick="openRecognizeModal()">📷 拍照识别</button>
-            <button class="btn btn-secondary" onclick="exportProducts()">导出</button>
-            <button class="btn btn-secondary" onclick="importProducts()">导入</button>
+
+        <!-- 工具栏 -->
+        <div class="toolbar">
+            <input type="text" class="search-input" id="searchInput" placeholder="搜款号、商品名、类目..." onkeyup="filterProducts()">
+            <div class="toolbar-divider"></div>
+            <button class="btn btn-primary" onclick="openAddModal()">＋ 添加商品</button>
+            <button class="btn btn-success" onclick="openRecognizeModal()">📷 AI识别导入</button>
+            <div class="toolbar-divider"></div>
+            <button class="btn btn-outline" onclick="importProducts()">📥 CSV导入</button>
+            <button class="btn btn-outline" onclick="exportProducts()">📤 导出</button>
         </div>
-        
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>款号</th>
-                        <th>商品名称</th>
-                        <th>类目</th>
-                        <th>进价</th>
-                        <th>售价</th>
-                        <th>库存</th>
-                        <th>状态</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody id="productTable">
-                </tbody>
-            </table>
+
+        <!-- 商品表格 -->
+        <div class="table-card">
+            <div class="table-header">
+                <h3>商品列表</h3>
+                <span class="count" id="tableCount">共 0 件商品</span>
+            </div>
+            <div id="tableBody">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>款号</th>
+                            <th>商品名称</th>
+                            <th>类目</th>
+                            <th>进价</th>
+                            <th>售价</th>
+                            <th>库存</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productTable"></tbody>
+                </table>
+                <div class="empty-state" id="emptyState" style="display:none;">
+                    <div class="icon">📦</div>
+                    <div class="title">暂无商品数据</div>
+                    <div class="desc">点击「添加商品」或「AI识别导入」开始管理商品库</div>
+                </div>
+                <div class="loading" id="loadingState" style="display:none;">
+                    <div class="spinner"></div>
+                    <div style="margin-top:12px;">加载中...</div>
+                </div>
+            </div>
         </div>
     </div>
-    
+
     <!-- 添加/编辑商品模态框 -->
     <div class="modal-overlay" id="productModal">
         <div class="modal">
-            <h3 id="modalTitle">添加商品</h3>
+            <div class="modal-head">
+                <h3 id="modalTitle">添加商品</h3>
+                <button class="modal-close" onclick="closeModal()">✕</button>
+            </div>
             <form id="productForm" onsubmit="saveProduct(event)">
-                <input type="hidden" id="productId">
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>款号 *</label>
-                        <input type="text" id="productSku" required placeholder="如：SKU001">
+                <div class="modal-body">
+                    <input type="hidden" id="productId">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>款号 <span class="required">*</span></label>
+                            <input type="text" id="productSku" required placeholder="如 SKU001">
+                        </div>
+                        <div class="form-group">
+                            <label>类目</label>
+                            <select id="productCategory">
+                                <option value="外套">外套</option>
+                                <option value="连衣裙">连衣裙</option>
+                                <option value="衬衫">衬衫</option>
+                                <option value="裤装">裤装</option>
+                                <option value="毛衣">毛衣</option>
+                                <option value="裙装">裙装</option>
+                                <option value="T恤">T恤</option>
+                                <option value="其他">其他</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="form-group">
-                        <label>类目</label>
-                        <select id="productCategory">
-                            <option value="外套">外套</option>
-                            <option value="连衣裙">连衣裙</option>
-                            <option value="衬衫">衬衫</option>
-                            <option value="裤装">裤装</option>
-                            <option value="毛衣">毛衣</option>
-                            <option value="裙装">裙装</option>
-                            <option value="T恤">T恤</option>
-                            <option value="其他">其他</option>
-                        </select>
+                        <label>商品名称 <span class="required">*</span></label>
+                        <input type="text" id="productName" required placeholder="如 黑色西装外套">
                     </div>
-                </div>
-                
-                <div class="form-group">
-                    <label>商品名称 *</label>
-                    <input type="text" id="productName" required placeholder="如：黑色西装外套">
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>进价 (元)</label>
-                        <input type="number" id="productCost" step="0.01" placeholder="0.00">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>进价 (元)</label>
+                            <input type="number" id="productCost" step="0.01" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label>售价 (元)</label>
+                            <input type="number" id="productPrice" step="0.01" placeholder="0.00">
+                        </div>
                     </div>
                     <div class="form-group">
-                        <label>售价 (元)</label>
-                        <input type="number" id="productPrice" step="0.01" placeholder="0.00">
+                        <label>库存数量</label>
+                        <input type="number" id="productStock" placeholder="0">
                     </div>
                 </div>
-                
-                <div class="form-group">
-                    <label>库存数量</label>
-                    <input type="number" id="productStock" placeholder="0">
-                </div>
-                
-                <div class="modal-buttons">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+                <div class="modal-foot">
+                    <button type="button" class="btn btn-outline" onclick="closeModal()">取消</button>
                     <button type="submit" class="btn btn-primary">保存</button>
                 </div>
             </form>
         </div>
     </div>
-    </div>
 
     <!-- 表格识别模态框 -->
     <div class="modal-overlay" id="recognizeModal">
         <div class="modal" style="max-width: 600px;">
-            <h3>📷 表格识别导入</h3>
-            <p style="color:rgba(255,255,255,0.6); margin-bottom:20px; font-size:14px;">
-                拍摄或上传商品表格/进货单图片，AI自动识别并导入商品库
-            </p>
-            
-            <div class="form-group">
-                <label>上传表格图片</label>
-                <input type="file" id="recognizeFile" accept="image/*,.pdf" 
-                       style="padding:10px; border:2px dashed rgba(255,255,255,0.2); border-radius:10px; cursor:pointer;">
+            <div class="modal-head">
+                <h3>📷 AI表格识别</h3>
+                <button class="modal-close" onclick="closeRecognizeModal()">✕</button>
             </div>
-            
-            <div id="recognizePreview" style="display:none; margin:15px 0;">
-                <img id="previewImg" style="max-width:100%; max-height:200px; border-radius:8px; border:1px solid rgba(255,255,255,0.1);">
-            </div>
+            <div class="modal-body">
+                <div class="recognize-upload-area" onclick="document.getElementById('recognizeFile').click()">
+                    <div class="upload-icon">📄</div>
+                    <div class="upload-text">点击上传表格图片或PDF</div>
+                    <div class="upload-hint">支持 JPG/PNG/PDF 格式</div>
+                    <input type="file" id="recognizeFile" accept="image/*,.pdf" style="display:none;">
+                </div>
 
-            <div class="form-group">
-                <label>导入类型</label>
-                <select id="recognizeImportType" style="width:100%; padding:12px; border:1px solid rgba(255,255,255,0.2); border-radius:8px; background:rgba(255,255,255,0.05); color:white; font-size:14px;">
-                    <option value="products">商品清单（SKU/品名/进价/售价/库存）</option>
-                    <option value="records">进销存记录（日期/品名/数量/金额/类型）</option>
-                </select>
-            </div>
+                <div id="recognizePreview" style="display:none; text-align:center;">
+                    <img id="previewImg" class="preview-img">
+                </div>
 
-            <div id="recognizeResult" style="display:none; margin:15px 0; padding:15px; background:rgba(255,255,255,0.05); border-radius:10px; max-height:300px; overflow-y:auto;">
-            </div>
+                <div class="form-group">
+                    <label>导入类型</label>
+                    <select id="recognizeImportType">
+                        <option value="products">商品清单（SKU/品名/进价/售价/库存）</option>
+                        <option value="records">进销存记录（日期/品名/数量/金额/类型）</option>
+                    </select>
+                </div>
 
-            <div class="modal-buttons">
-                <button type="button" class="btn btn-secondary" onclick="closeRecognizeModal()">取消</button>
-                <button type="button" id="recognizeBtn" class="btn btn-primary" onclick="recognizeTable()">🔍 识别</button>
-                <button type="button" id="importBtn" class="btn btn-primary" style="display:none;" onclick="confirmImport()">✅ 确认导入</button>
+                <div id="recognizeResult" style="display:none;" class="recognize-result-box"></div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn btn-outline" onclick="closeRecognizeModal()">取消</button>
+                <button class="btn btn-primary" id="recognizeBtn" onclick="recognizeTable()">🔍 识别</button>
+                <button class="btn btn-success" id="importBtn" style="display:none;" onclick="confirmImport()">✅ 确认导入</button>
             </div>
         </div>
     </div>
@@ -329,100 +524,98 @@
     <script>
         let products = [];
         const token = localStorage.getItem('token');
-        
+
         async function loadProducts() {
+            document.getElementById('loadingState').style.display = '';
+            document.getElementById('emptyState').style.display = 'none';
             try {
                 const response = await fetch('/api/products', {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': 'Bearer ' + token }
                 });
                 const data = await response.json();
                 products = data.products || [];
-                renderProducts();
-                updateStats();
             } catch (error) {
                 console.error('加载商品失败', error);
-                // 使用模拟数据
-                products = [
-                    { product_id: '1', sku: 'SKU001', name: '黑色西装外套', category: '外套', cost_price: 150, sale_price: 359, stock: 50 },
-                    { product_id: '2', sku: 'SKU002', name: '红色连衣裙', category: '连衣裙', cost_price: 120, sale_price: 299, stock: 35 },
-                    { product_id: '3', sku: 'SKU003', name: '白色衬衫', category: '衬衫', cost_price: 60, sale_price: 159, stock: 80 },
-                    { product_id: '4', sku: 'SKU004', name: '蓝色牛仔裤', category: '裤装', cost_price: 80, sale_price: 199, stock: 60 },
-                    { product_id: '5', sku: 'SKU005', name: '针织开衫', category: '毛衣', cost_price: 90, sale_price: 229, stock: 5 },
-                    { product_id: '6', sku: 'SKU006', name: '半身裙', category: '裙装', cost_price: 70, sale_price: 179, stock: 0 }
-                ];
-                renderProducts();
-                updateStats();
+                products = [];
             }
+            document.getElementById('loadingState').style.display = 'none';
+            renderProducts();
+            updateStats();
         }
-        
-        function renderProducts(filter = '') {
+
+        function renderProducts(filter) {
+            if (filter === undefined) filter = document.getElementById('searchInput').value || '';
             const tbody = document.getElementById('productTable');
-            const filtered = products.filter(p => 
-                p.sku?.toLowerCase().includes(filter.toLowerCase()) ||
-                p.name?.toLowerCase().includes(filter.toLowerCase()) ||
-                p.category?.toLowerCase().includes(filter.toLowerCase())
-            );
-            
-            tbody.innerHTML = filtered.map(p => {
-                let status = 'active';
-                let statusText = '正常';
-                if (p.stock <= 0) {
-                    status = 'out';
-                    statusText = '缺货';
-                } else if (p.stock < 10) {
-                    status = 'low';
-                    statusText = '低库存';
-                }
-                
-                return `
-                    <tr>
-                        <td><strong>${p.sku}</strong></td>
-                        <td>${p.name}</td>
-                        <td>${p.category || '-'}</td>
-                        <td>¥${p.cost_price || 0}</td>
-                        <td>¥${p.sale_price || 0}</td>
-                        <td>${p.stock || 0}</td>
-                        <td><span class="status-badge status-${status}">${statusText}</span></td>
-                        <td class="actions">
-                            <button class="action-btn" onclick="editProduct('${p.product_id || p.sku}')">编辑</button>
-                            <button class="action-btn" onclick="deleteProduct('${p.product_id || p.sku}')">删除</button>
-                        </td>
-                    </tr>
-                `;
+            const filtered = products.filter(function(p) {
+                var s = filter.toLowerCase();
+                return (p.sku || '').toLowerCase().includes(s) ||
+                       (p.name || '').toLowerCase().includes(s) ||
+                       (p.category || '').toLowerCase().includes(s);
+            });
+
+            document.getElementById('tableCount').textContent = '共 ' + filtered.length + ' 件商品';
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '';
+                document.getElementById('emptyState').style.display = '';
+                return;
+            }
+            document.getElementById('emptyState').style.display = 'none';
+
+            tbody.innerHTML = filtered.map(function(p) {
+                var stock = p.stock || 0;
+                var statusClass, statusText;
+                if (stock <= 0) { statusClass = 'stock-out'; statusText = '缺货'; }
+                else if (stock < 10) { statusClass = 'stock-low'; statusText = '低库存'; }
+                else { statusClass = 'stock-ok'; statusText = '正常'; }
+
+                return '<tr>' +
+                    '<td><span class="sku-tag">' + (p.sku || '-') + '</span></td>' +
+                    '<td><strong>' + (p.name || '-') + '</strong></td>' +
+                    '<td><span class="category-tag">' + (p.category || '-') + '</span></td>' +
+                    '<td><span class="cost-price">¥' + (p.cost_price || 0) + '</span></td>' +
+                    '<td><span class="price">¥' + (p.sale_price || 0) + '</span></td>' +
+                    '<td>' + stock + '</td>' +
+                    '<td><span class="stock-badge ' + statusClass + '">' + statusText + '</span></td>' +
+                    '<td class="actions">' +
+                        '<button class="btn btn-outline btn-sm" onclick="editProduct(\'' + (p.product_id || p.sku) + '\')">编辑</button>' +
+                        '<button class="btn btn-danger btn-sm" onclick="deleteProduct(\'' + (p.product_id || p.sku) + '\')">删除</button>' +
+                    '</td>' +
+                '</tr>';
             }).join('');
         }
-        
+
         function updateStats() {
             document.getElementById('totalProducts').textContent = products.length;
-            document.getElementById('totalStock').textContent = products.reduce((sum, p) => sum + (p.stock || 0), 0);
-            document.getElementById('lowStockCount').textContent = products.filter(p => p.stock < 10).length;
-            const totalValue = products.reduce((sum, p) => sum + (p.cost_price || 0) * (p.stock || 0), 0);
+            document.getElementById('totalStock').textContent = products.reduce(function(sum, p) { return sum + (p.stock || 0); }, 0);
+            document.getElementById('lowStockCount').textContent = products.filter(function(p) { return (p.stock || 0) < 10; }).length;
+            var totalValue = products.reduce(function(sum, p) { return sum + (p.cost_price || 0) * (p.stock || 0); }, 0);
             document.getElementById('totalValue').textContent = '¥' + totalValue.toLocaleString();
         }
-        
+
         function filterProducts() {
-            const filter = document.getElementById('searchInput').value;
-            renderProducts(filter);
+            renderProducts();
         }
-        
+
+        /* 添加/编辑 */
         function openAddModal() {
             document.getElementById('modalTitle').textContent = '添加商品';
             document.getElementById('productForm').reset();
             document.getElementById('productId').value = '';
             document.getElementById('productModal').classList.add('show');
         }
-        
+
         function closeModal() {
             document.getElementById('productModal').classList.remove('show');
         }
-        
+
         function editProduct(id) {
-            const product = products.find(p => p.product_id === id || p.sku === id);
+            var product = products.find(function(p) { return p.product_id === id || p.sku === id; });
             if (product) {
                 document.getElementById('modalTitle').textContent = '编辑商品';
                 document.getElementById('productId').value = product.product_id || product.sku;
-                document.getElementById('productSku').value = product.sku;
-                document.getElementById('productName').value = product.name;
+                document.getElementById('productSku').value = product.sku || '';
+                document.getElementById('productName').value = product.name || '';
                 document.getElementById('productCategory').value = product.category || '其他';
                 document.getElementById('productCost').value = product.cost_price || '';
                 document.getElementById('productPrice').value = product.sale_price || '';
@@ -430,12 +623,11 @@
                 document.getElementById('productModal').classList.add('show');
             }
         }
-        
+
         async function saveProduct(e) {
             e.preventDefault();
-            
-            const id = document.getElementById('productId').value;
-            const productData = {
+            var id = document.getElementById('productId').value;
+            var productData = {
                 sku: document.getElementById('productSku').value,
                 name: document.getElementById('productName').value,
                 category: document.getElementById('productCategory').value,
@@ -443,150 +635,122 @@
                 sale_price: parseFloat(document.getElementById('productPrice').value) || 0,
                 stock: parseInt(document.getElementById('productStock').value) || 0
             };
-            
+
             try {
-                const url = id ? `/api/products/${id}` : '/api/products';
-                const method = id ? 'PUT' : 'POST';
-                
-                const response = await fetch(url, {
-                    method,
+                var url = id ? '/api/products/' + id : '/api/products';
+                var method = id ? 'PUT' : 'POST';
+                var response = await fetch(url, {
+                    method: method,
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Authorization': 'Bearer ' + token
                     },
                     body: JSON.stringify(productData)
                 });
-                
                 if (response.ok) {
                     closeModal();
-                    loadProducts();
+                    await loadProducts();
                     alert('保存成功！');
                 } else {
-                    alert('保存失败，请重试');
+                    var err = await response.json();
+                    alert('保存失败：' + (err.error || '请重试'));
                 }
             } catch (error) {
-                // 模拟保存
-                if (id) {
-                    const index = products.findIndex(p => p.product_id === id || p.sku === id);
-                    if (index >= 0) products[index] = { ...products[index], ...productData };
-                } else {
-                    productData.product_id = 'prod_' + Date.now();
-                    products.push(productData);
-                }
-                closeModal();
-                renderProducts();
-                updateStats();
-                alert('保存成功！');
+                alert('保存失败：' + error.message);
             }
         }
-        
+
         async function deleteProduct(id) {
             if (!confirm('确定删除此商品？')) return;
-            
             try {
-                const response = await fetch(`/api/products/${id}`, {
+                var response = await fetch('/api/products/' + id, {
                     method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': 'Bearer ' + token }
                 });
-                
                 if (response.ok) {
-                    loadProducts();
+                    await loadProducts();
+                } else {
+                    alert('删除失败');
                 }
             } catch (error) {
-                products = products.filter(p => p.product_id !== id && p.sku !== id);
-                renderProducts();
-                updateStats();
+                alert('删除失败：' + error.message);
             }
         }
-        
+
+        /* 导出 */
         function exportProducts() {
-            const csv = '款号,商品名称,类目,进价,售价,库存\n' +
-                products.map(p => `${p.sku},${p.name},${p.category},${p.cost_price},${p.sale_price},${p.stock}`).join('\n');
-            
-            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
+            var csv = '款号,商品名称,类目,进价,售价,库存\n' +
+                products.map(function(p) {
+                    return [p.sku, p.name, p.category, p.cost_price, p.sale_price, p.stock].join(',');
+                }).join('\n');
+
+            var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
             a.href = url;
             a.download = '商品库_' + new Date().toISOString().slice(0,10) + '.csv';
             a.click();
+            URL.revokeObjectURL(url);
         }
-        
+
+        /* CSV导入 */
         function importProducts() {
-            const input = document.createElement('input');
+            var input = document.createElement('input');
             input.type = 'file';
-            input.accept = '.csv,.xlsx,.xls';
-            input.onchange = async (e) => {
-                const file = e.target.files[0];
+            input.accept = '.csv';
+            input.onchange = async function(e) {
+                var file = e.target.files[0];
                 if (!file) return;
-                
                 try {
-                    const text = await file.text();
-                    const lines = text.split('\n').filter(l => l.trim());
-                    
-                    // 跳过表头
-                    const dataLines = lines.slice(1);
-                    let successCount = 0;
-                    let failCount = 0;
-                    
-                    for (const line of dataLines) {
-                        const parts = line.split(',').map(s => s.trim().replace(/[\r\n"]/g, ''));
-                        const [sku, name, category, cost_price, sale_price, stock] = parts;
-                        
-                        if (!sku || !name) { failCount++; continue; }
-                        
-                        const productData = {
-                            sku: sku,
-                            name: name,
-                            category: category || '其他',
-                            cost_price: parseFloat(cost_price) || 0,
-                            sale_price: parseFloat(sale_price) || 0,
-                            stock: parseInt(stock) || 0
+                    var text = await file.text();
+                    var lines = text.split('\n').filter(function(l) { return l.trim(); });
+                    var dataLines = lines.slice(1);
+                    var successCount = 0, failCount = 0;
+
+                    for (var i = 0; i < dataLines.length; i++) {
+                        var parts = dataLines[i].split(',').map(function(s) { return s.trim().replace(/[\r\n"]/g, ''); });
+                        var productData = {
+                            sku: parts[0] || '',
+                            name: parts[1] || '',
+                            category: parts[2] || '其他',
+                            cost_price: parseFloat(parts[3]) || 0,
+                            sale_price: parseFloat(parts[4]) || 0,
+                            stock: parseInt(parts[5]) || 0
                         };
-                        
+                        if (!productData.sku || !productData.name) { failCount++; continue; }
+
                         try {
-                            const resp = await fetch('/api/products', {
+                            var resp = await fetch('/api/products', {
                                 method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${token}`
-                                },
+                                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                                 body: JSON.stringify(productData)
                             });
-                            
-                            if (resp.ok) {
-                                successCount++;
-                            } else {
-                                failCount++;
-                            }
-                        } catch (err) {
-                            failCount++;
-                        }
+                            if (resp.ok) successCount++;
+                            else failCount++;
+                        } catch (err) { failCount++; }
                     }
-                    
-                    // 刷新列表
                     await loadProducts();
-                    alert(`导入完成：成功 ${successCount} 条，失败 ${failCount} 条`);
+                    alert('导入完成：成功 ' + successCount + ' 条，失败 ' + failCount + ' 条');
                 } catch (error) {
                     alert('导入失败：' + error.message);
                 }
             };
             input.click();
         }
-        
-        // 初始化
-        loadProducts();
 
-        // ==================== 表格识别功能 ====================
-        let recognizedRows = [];
-        let recognizedType = '';
+        /* ========== AI表格识别 ========== */
+        var recognizedRows = [];
+        var recognizedType = '';
 
         function openRecognizeModal() {
             document.getElementById('recognizeModal').classList.add('show');
+            document.getElementById('recognizePreview').style.display = 'none';
             document.getElementById('recognizeResult').style.display = 'none';
             document.getElementById('importBtn').style.display = 'none';
             document.getElementById('recognizeBtn').style.display = '';
             document.getElementById('recognizeBtn').disabled = false;
             document.getElementById('recognizeBtn').textContent = '🔍 识别';
+            document.getElementById('recognizeFile').value = '';
             recognizedRows = [];
         }
 
@@ -594,91 +758,70 @@
             document.getElementById('recognizeModal').classList.remove('show');
         }
 
-        // 图片预览
         document.getElementById('recognizeFile').addEventListener('change', function(e) {
-            const file = e.target.files[0];
+            var file = e.target.files[0];
             if (!file) return;
-            const reader = new FileReader();
+            var reader = new FileReader();
             reader.onload = function(ev) {
                 document.getElementById('previewImg').src = ev.target.result;
-                document.getElementById('recognizePreview').style.display = 'block';
+                document.getElementById('recognizePreview').style.display = '';
             };
             reader.readAsDataURL(file);
         });
 
         async function recognizeTable() {
-            const fileInput = document.getElementById('recognizeFile');
+            var fileInput = document.getElementById('recognizeFile');
             if (!fileInput.files || !fileInput.files[0]) {
-                alert('请先选择图片文件');
+                alert('请先选择图片或PDF文件');
                 return;
             }
 
-            const btn = document.getElementById('recognizeBtn');
+            var btn = document.getElementById('recognizeBtn');
             btn.disabled = true;
             btn.textContent = '⏳ 识别中...';
 
             try {
                 // 1. 上传图片
-                const formData = new FormData();
+                var formData = new FormData();
                 formData.append('file', fileInput.files[0]);
-
-                const uploadResp = await fetch('/api/upload', {
+                var uploadResp = await fetch('/api/upload', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` },
+                    headers: { 'Authorization': 'Bearer ' + token },
                     body: formData
                 });
-                const uploadData = await uploadResp.json();
+                var uploadData = await uploadResp.json();
+                if (!uploadData.url) throw new Error('图片上传失败');
 
-                if (!uploadData.url) {
-                    throw new Error('图片上传失败');
-                }
-
-                // 2. 调用表格识别API
-                const importType = document.getElementById('recognizeImportType').value;
-                const resp = await fetch('/api/table/recognize', {
+                // 2. 调用识别API
+                var importType = document.getElementById('recognizeImportType').value;
+                var resp = await fetch('/api/table/recognize', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        image_url: uploadData.url,
-                        import_type: importType,
-                        org_id: 'org_default'
-                    })
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ image_url: uploadData.url, import_type: importType, org_id: 'org_default' })
                 });
+                var result = await resp.json();
+                if (!result.success) throw new Error(result.error || '识别失败');
 
-                const result = await resp.json();
-
-                if (!result.success) {
-                    throw new Error(result.error || '识别失败');
-                }
-
-                // 3. 展示识别结果
+                // 3. 展示结果
                 recognizedRows = result.rows || [];
                 recognizedType = result.table_type || importType;
 
-                const resultDiv = document.getElementById('recognizeResult');
-                resultDiv.style.display = 'block';
+                var resultDiv = document.getElementById('recognizeResult');
+                resultDiv.style.display = '';
 
-                let html = `<div style="margin-bottom:10px; color:#4caf50; font-weight:bold;">
-                    ✅ 识别成功！共 ${result.row_count} 行数据（类型：${recognizedType === 'products' ? '商品清单' : '进销存记录'}）
-                </div>`;
+                var html = '<div class="result-header">✅ 识别成功！共 ' + result.row_count + ' 行数据';
+                html += '（' + (recognizedType === 'products' ? '商品清单' : '进销存记录') + '）</div>';
 
-                // 渲染预览表格
                 if (recognizedRows.length > 0) {
-                    const cols = Object.keys(recognizedRows[0]);
-                    html += '<table style="width:100%; font-size:12px; border-collapse:collapse;">';
-                    html += '<tr>' + cols.map(c => `<th style="padding:6px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05);">${c}</th>`).join('') + '</tr>';
-                    for (const row of recognizedRows) {
-                        html += '<tr>' + cols.map(c => `<td style="padding:6px; border:1px solid rgba(255,255,255,0.1);">${row[c] ?? ''}</td>`).join('') + '</tr>';
+                    var cols = Object.keys(recognizedRows[0]);
+                    html += '<table><tr>' + cols.map(function(c) { return '<th>' + c + '</th>'; }).join('') + '</tr>';
+                    for (var i = 0; i < recognizedRows.length; i++) {
+                        html += '<tr>' + cols.map(function(c) { return '<td>' + (recognizedRows[i][c] != null ? recognizedRows[i][c] : '') + '</td>'; }).join('') + '</tr>';
                     }
                     html += '</table>';
                 }
 
                 resultDiv.innerHTML = html;
-
-                // 显示确认导入按钮
                 document.getElementById('importBtn').style.display = '';
                 btn.textContent = '🔍 重新识别';
                 btn.disabled = false;
@@ -692,31 +835,20 @@
 
         async function confirmImport() {
             if (recognizedRows.length === 0) return;
-
-            const importBtn = document.getElementById('importBtn');
+            var importBtn = document.getElementById('importBtn');
             importBtn.disabled = true;
             importBtn.textContent = '⏳ 导入中...';
 
             try {
-                const importType = document.getElementById('recognizeImportType').value;
-                const resp = await fetch('/api/table/recognize', {
+                var importType = document.getElementById('recognizeImportType').value;
+                var resp = await fetch('/api/table/recognize', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        import_type: importType,
-                        rows: recognizedRows,
-                        table_type: recognizedType,
-                        org_id: 'org_default'
-                    })
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ import_type: importType, rows: recognizedRows, table_type: recognizedType, org_id: 'org_default' })
                 });
-
-                const result = await resp.json();
-
+                var result = await resp.json();
                 if (result.success) {
-                    alert(`导入成功！共导入 ${result.imported} 条数据`);
+                    alert('导入成功！共导入 ' + result.imported + ' 条数据');
                     closeRecognizeModal();
                     await loadProducts();
                 } else {
@@ -728,6 +860,9 @@
                 importBtn.disabled = false;
             }
         }
+
+        // 初始化
+        loadProducts();
     </script>
 </body>
 </html>
