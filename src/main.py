@@ -1447,9 +1447,12 @@ async def batch_delete_products_api(request: Request):
 @app.post("/api/products/import")
 async def import_products_api(request: Request):
     """批量导入商品（Excel文件）"""
-    import pandas as pd
-    import io
     from utils.auth import decode_token
+    from utils.product_import import (
+        build_product_from_row,
+        normalize_product_columns,
+        read_product_spreadsheet,
+    )
     
     try:
         # 获取认证信息
@@ -1471,56 +1474,22 @@ async def import_products_api(request: Request):
         if not file:
             return {"success": False, "message": "未找到上传文件"}
         
-        # 读取文件内容
         content = await file.read()
         filename = file.filename or "unknown.xlsx"
-        
-        # 根据文件扩展名选择解析方式
-        if filename.endswith('.csv'):
-            df = pd.read_csv(io.BytesIO(content))
-        else:
-            # 支持 .xlsx 和 .xls
-            df = pd.read_excel(io.BytesIO(content), engine='openpyxl' if filename.endswith('.xlsx') else 'xlrd')
+
+        df = normalize_product_columns(read_product_spreadsheet(content, filename))
         
         logger.info(f"Excel解析成功，共{len(df)}行，列名: {list(df.columns)}")
-        
-        # 列名映射（支持多种中文列名）
-        column_mapping = {
-            '款号': 'sku', 'SKU': 'sku', 'sku': 'sku', '货号': 'sku',
-            '商品名称': 'name', '名称': 'name', '品名': 'name', 'name': 'name',
-            '类目': 'category', '分类': 'category', '类别': 'category', 'category': 'category',
-            '进价': 'cost_price', '成本价': 'cost_price', 'cost_price': 'cost_price',
-            '售价': 'sale_price', '单价': 'sale_price', 'sale_price': 'sale_price',
-            '库存': 'stock', '数量': 'stock', 'stock': 'stock'
-        }
-        
-        # 重命名列
-        df.columns = [column_mapping.get(str(col).strip(), str(col).strip()) for col in df.columns]
-        
+        if df.empty:
+            return {"success": False, "message": "导入失败：表格中没有可导入的数据"}
+
         success_count = 0
         fail_count = 0
         errors = []
         
         for idx, row in df.iterrows():
             try:
-                sku = str(row.get('sku', '')).strip() if pd.notna(row.get('sku')) else ''
-                name = str(row.get('name', '')).strip() if pd.notna(row.get('name')) else ''
-                
-                if not sku or not name or sku == 'nan' or name == 'nan':
-                    fail_count += 1
-                    errors.append(f"第{idx+1}行: 款号或名称为空")
-                    continue
-                
-                product_data = {
-                    "org_id": org_id,
-                    "sku": sku,
-                    "name": name,
-                    "category": str(row.get('category', '其他')).strip() if pd.notna(row.get('category')) else '其他',
-                    "cost_price": float(row.get('cost_price', 0) or 0),
-                    "sale_price": float(row.get('sale_price', 0) or 0),
-                    "stock": int(float(row.get('stock', 0) or 0))
-                }
-                
+                product_data = build_product_from_row(row, org_id)
                 await repo.insert_product(product_data, merge_duplicate_sku=merge_duplicates)
                 success_count += 1
                 
@@ -1530,9 +1499,14 @@ async def import_products_api(request: Request):
         
         logger.info(f"导入完成: 成功{success_count}条, 失败{fail_count}条")
         
+        ok = success_count > 0 or fail_count == 0
+        message = f"导入完成：成功 {success_count} 条，失败 {fail_count} 条"
+        if success_count == 0 and errors:
+            message += f"；首个错误：{errors[0]}"
+
         return {
-            "success": True,
-            "message": f"导入完成：成功 {success_count} 条，失败 {fail_count} 条",
+            "success": ok,
+            "message": message,
             "success_count": success_count,
             "fail_count": fail_count,
             "errors": errors[:10]  # 只返回前10个错误
@@ -2122,7 +2096,7 @@ async def recognize_table(request: Request):
                         "cost_price": float(row.get("cost_price", 0) or 0),
                         "sale_price": float(row.get("sale_price", 0) or 0),
                         "stock": int(row.get("stock", 0) or 0),
-                    }, merge_duplicate=merge_duplicate)
+                    }, merge_duplicate_sku=merge_duplicate)
                     imported_count += 1
                     if result and result.get("merged"):
                         merged_count += 1

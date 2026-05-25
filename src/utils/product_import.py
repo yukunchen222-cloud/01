@@ -1,0 +1,133 @@
+"""Utilities for importing products from spreadsheet rows."""
+import io
+import re
+from typing import Any
+
+import pandas as pd
+
+
+COLUMN_ALIASES = {
+    "sku": "sku",
+    "SKU": "sku",
+    "款号": "sku",
+    "货号": "sku",
+    "编码": "sku",
+    "商品编码": "sku",
+    "条码": "sku",
+    "商品条码": "sku",
+    "code": "sku",
+    "product_code": "sku",
+    "商品名称": "name",
+    "名称": "name",
+    "品名": "name",
+    "商品名": "name",
+    "name": "name",
+    "product_name": "name",
+    "类目": "category",
+    "分类": "category",
+    "类别": "category",
+    "品类": "category",
+    "category": "category",
+    "进价": "cost_price",
+    "成本价": "cost_price",
+    "成本": "cost_price",
+    "采购价": "cost_price",
+    "cost": "cost_price",
+    "cost_price": "cost_price",
+    "售价": "sale_price",
+    "销售价": "sale_price",
+    "零售价": "sale_price",
+    "吊牌价": "sale_price",
+    "单价": "sale_price",
+    "price": "sale_price",
+    "sale_price": "sale_price",
+    "库存": "stock",
+    "库存数量": "stock",
+    "数量": "stock",
+    "stock": "stock",
+    "qty": "stock",
+}
+
+
+def read_product_spreadsheet(content: bytes, filename: str) -> pd.DataFrame:
+    """Read an uploaded product spreadsheet into a DataFrame."""
+    suffix = (filename or "").lower().rsplit(".", 1)[-1]
+    buffer = io.BytesIO(content)
+
+    if suffix == "csv":
+        for encoding in ("utf-8-sig", "utf-8", "gb18030"):
+            buffer.seek(0)
+            try:
+                return pd.read_csv(buffer, encoding=encoding)
+            except UnicodeDecodeError:
+                continue
+        buffer.seek(0)
+        return pd.read_csv(buffer)
+
+    if suffix == "xlsx":
+        return pd.read_excel(buffer, engine="openpyxl")
+    if suffix == "xls":
+        return pd.read_excel(buffer, engine="xlrd")
+
+    raise ValueError("仅支持 .xlsx、.xls、.csv 文件")
+
+
+def normalize_product_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize common Chinese/English product headers to API field names."""
+    normalized = df.copy()
+    normalized.columns = [_normalize_header(col) for col in normalized.columns]
+    return normalized
+
+
+def build_product_from_row(row: Any, org_id: str) -> dict:
+    """Build a product payload from a normalized pandas row."""
+    sku = _cell_to_str(row.get("sku", ""))
+    name = _cell_to_str(row.get("name", ""))
+    if not sku or not name:
+        raise ValueError("款号或名称为空")
+
+    return {
+        "org_id": org_id,
+        "sku": sku,
+        "name": name,
+        "category": _cell_to_str(row.get("category", "")) or "其他",
+        "cost_price": _cell_to_float(row.get("cost_price", 0)),
+        "sale_price": _cell_to_float(row.get("sale_price", 0)),
+        "stock": int(_cell_to_float(row.get("stock", 0))),
+    }
+
+
+def _normalize_header(value: Any) -> str:
+    header = _cell_to_str(value)
+    compact = re.sub(r"[\s_（）()\-]+", "", header).lower()
+
+    for alias, field in COLUMN_ALIASES.items():
+        if compact == re.sub(r"[\s_（）()\-]+", "", alias).lower():
+            return field
+
+    return header
+
+
+def _cell_to_str(value: Any) -> str:
+    if value is None or pd.isna(value):
+        return ""
+    text = str(value).strip()
+    if text.lower() == "nan":
+        return ""
+    return text
+
+
+def _cell_to_float(value: Any) -> float:
+    if value is None or pd.isna(value):
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    text = str(value).strip()
+    if not text:
+        return 0.0
+    text = text.translate(str.maketrans("０１２３４５６７８９．，", "0123456789.,"))
+    text = re.sub(r"[￥¥,\s]", "", text)
+    if not text:
+        return 0.0
+    return float(text)
