@@ -11,9 +11,10 @@ from coze_coding_utils.runtime_ctx.context import Context
 from coze_coding_dev_sdk import LLMClient
 from graphs.state import OCRInput, OCROutput
 from utils.file.file import File, FileOps
+from utils.run_sync import run_sync
 
 
-def ocr_recognition_node(
+async def ocr_recognition_node(
     state: OCRInput,
     config: RunnableConfig,
     runtime: Runtime[Context]
@@ -61,11 +62,11 @@ def ocr_recognition_node(
     
     if is_pdf:
         # PDF文件：使用FileOps提取文本
-        ocr_text = _extract_pdf_text(image_file)
+        ocr_text = await run_sync(_extract_pdf_text, image_file)
         confidence = 0.90
     else:
         # 图片文件：使用多模态LLM识别
-        ocr_text = _recognize_image(ctx, file_url)
+        ocr_text = await run_sync(_recognize_image, ctx, file_url)
     
     return OCROutput(
         ocr_text=ocr_text,

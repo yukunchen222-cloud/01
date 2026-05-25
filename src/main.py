@@ -4,6 +4,7 @@ import json
 import threading
 import traceback
 import logging
+from functools import wraps
 from typing import Any, Dict, Iterable, AsyncIterable, AsyncGenerator, Optional
 import cozeloop
 import uvicorn
@@ -32,6 +33,23 @@ setup_logging(
 )
 
 logger = logging.getLogger(__name__)
+
+
+def endpoint_timeout(seconds: float = 5.0):
+    """Fail fast for read endpoints instead of leaving the browser pending."""
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            try:
+                return await asyncio.wait_for(func(*args, **kwargs), timeout=seconds)
+            except asyncio.TimeoutError:
+                logger.warning("%s timed out after %.1fs", func.__name__, seconds)
+                raise HTTPException(status_code=504, detail="处理超时，请重试")
+
+        return wrapper
+
+    return decorator
+
 from coze_coding_utils.helper.agent_helper import to_stream_input
 from coze_coding_utils.openai.handler import OpenAIChatHandler
 from coze_coding_utils.log.parser import LangGraphParser
@@ -240,6 +258,7 @@ app = FastAPI(title="服装连锁AI记账助手", version="1.0.0")
 # ==================== asyncpg 连接池生命周期 ====================
 from storage.database import repository as repo
 from utils.db_pool import get_pool, close_pool
+from utils.run_sync import run_sync, shutdown_executor
 
 
 @app.on_event("startup")
@@ -251,6 +270,7 @@ async def _init_pool():
 @app.on_event("shutdown")
 async def _close_pool():
     await close_pool()
+    shutdown_executor()
 
 # CORS配置 - 限制来源而非全开放
 from fastapi.middleware.cors import CORSMiddleware
@@ -480,7 +500,8 @@ async def api_voice_base64(request: Request):
         
         # 步骤1：使用ASR客户端直接用base64识别语音
         asr_client = ASRClient(ctx=ctx)
-        recognized_text, asr_data = asr_client.recognize(
+        recognized_text, asr_data = await run_sync(
+            asr_client.recognize,
             uid="accounting_assistant",
             base64_data=audio_base64
         )
@@ -526,7 +547,8 @@ async def api_upload(file: UploadFile = File(...)):
         filename = f"upload_{timestamp}_{file.filename}"
         
         # 上传到对象存储
-        result = storage_client.put_object(
+        result = await run_sync(
+            storage_client.put_object,
             key=f"uploads/{filename}",
             data=content
         )
@@ -585,6 +607,7 @@ async def api_document(request: Request):
         return {"success": False, "error": str(e)}
 
 @app.get("/api/records")
+@endpoint_timeout(5.0)
 async def get_records(
     request: Request,
     store_id: str = None,
@@ -703,6 +726,7 @@ async def update_record(record_id: str, request: Request):
         return {"success": False, "message": str(e)}
 
 @app.get("/api/dashboard")
+@endpoint_timeout(5.0)
 async def get_dashboard_data(
     request: Request,
     period: str = "month",
@@ -948,6 +972,7 @@ async def get_dashboard_data(
         return {"success": False, "error": str(e)}
 
 @app.get("/api/analysis")
+@endpoint_timeout(5.0)
 async def get_analysis(request: Request, period: str = "month", store_id: str = "all"):
     """款式分析API - 畅销款/滞销款/补货建议"""
     try:
@@ -992,6 +1017,7 @@ async def get_analysis(request: Request, period: str = "month", store_id: str = 
         return {"success": False, "error": str(e)}
 
 @app.get("/api/alerts")
+@endpoint_timeout(5.0)
 async def get_alerts(request: Request, period: str = "month", store_id: str = "all"):
     """异常预警API - 规则引擎（5类异常检测）"""
     try:
@@ -1074,6 +1100,7 @@ async def get_alerts(request: Request, period: str = "month", store_id: str = "a
         return {"success": False, "error": str(e)}
 
 @app.get("/api/history")
+@endpoint_timeout(5.0)
 async def get_history(
     request: Request,
     page: int = 1,
@@ -1141,6 +1168,7 @@ async def get_history(
         return {"success": False, "error": str(e)}
 
 @app.get("/api/pending_reviews")
+@endpoint_timeout(5.0)
 async def get_pending_reviews(request: Request):
     """获取待审核记录（审核中心专用）"""
     try:
@@ -1177,6 +1205,7 @@ async def get_pending_reviews(request: Request):
         return {"success": False, "error": str(e)}
 
 @app.get("/api/reviews")
+@endpoint_timeout(5.0)
 async def get_reviews(request: Request):
     """获取待审核记录"""
     try:
@@ -1459,7 +1488,7 @@ async def upload_voice(file: UploadFile = File(...), store_id: str = ""):
         audio_client = AudioClient(ctx=ctx)
         
         with open(tmp_path, "rb") as audio_file:
-            result = audio_client.asr(audio_file.read())
+            result = await run_sync(audio_client.asr, audio_file.read())
         
         # 清理临时文件
         os.unlink(tmp_path)
@@ -1501,7 +1530,8 @@ async def upload_image(file: UploadFile = File(...), store_id: str = ""):
         timestamp = int(time.time() * 1000)
         filename = f"upload_{timestamp}_{file.filename}"
         
-        result = storage_client.put_object(
+        result = await run_sync(
+            storage_client.put_object,
             key=f"images/{filename}",
             data=content
         )
@@ -1558,7 +1588,7 @@ async def export_report(request: Request):
         runtime = type('Runtime', (), {'context': ctx})()
         config = {"configurable": {}}
         
-        result = report_export_node(report_input, config, runtime)
+        result = await run_sync(report_export_node, report_input, config, runtime)
         
         return {
             "success": result.success,

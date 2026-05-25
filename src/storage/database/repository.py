@@ -6,14 +6,41 @@
 """
 import json
 import logging
+import contextvars
+from contextlib import asynccontextmanager
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional, List, Dict
+from typing import Any, Optional, List, Dict, AsyncIterator
 import asyncpg
 
 from utils.db_pool import get_pool
 
 logger = logging.getLogger(__name__)
+
+_in_acquire: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "in_acquire", default=False
+)
+
+
+def _check_no_nested_acquire() -> None:
+    """Fail fast if repository code tries to acquire while already holding a connection."""
+    if _in_acquire.get():
+        raise RuntimeError(
+            "Nested database acquire detected: do not call a repository function "
+            "while another repository acquire block is still active."
+        )
+
+
+@asynccontextmanager
+async def _acquire_conn() -> AsyncIterator[asyncpg.Connection]:
+    _check_no_nested_acquire()
+    pool = await get_pool()
+    token = _in_acquire.set(True)
+    try:
+        async with pool.acquire() as conn:
+            yield conn
+    finally:
+        _in_acquire.reset(token)
 
 
 # ============================================================
@@ -60,8 +87,7 @@ def _rows(records: List[asyncpg.Record]) -> List[dict]:
 # ============================================================
 
 async def get_all_stores(org_id: Optional[str] = None) -> List[dict]:
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         if org_id:
             rows = await conn.fetch(
                 "SELECT store_id, name, address, org_id FROM stores WHERE org_id = $1 ORDER BY store_id",
@@ -79,8 +105,7 @@ get_stores = get_all_stores
 
 
 async def get_store(store_id: str) -> Optional[dict]:
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         row = await conn.fetchrow(
             "SELECT store_id, name, address, org_id FROM stores WHERE store_id = $1",
             store_id,
@@ -93,8 +118,7 @@ async def get_store(store_id: str) -> Optional[dict]:
 # ============================================================
 
 async def get_user_by_username(username: str) -> Optional[dict]:
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         row = await conn.fetchrow(
             "SELECT * FROM users WHERE username = $1", username
         )
@@ -102,8 +126,7 @@ async def get_user_by_username(username: str) -> Optional[dict]:
 
 
 async def get_user_by_id(user_id: str) -> Optional[dict]:
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         row = await conn.fetchrow(
             "SELECT * FROM users WHERE id = $1", user_id
         )
@@ -111,8 +134,7 @@ async def get_user_by_id(user_id: str) -> Optional[dict]:
 
 
 async def get_users_by_org(org_id: str) -> List[dict]:
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         rows = await conn.fetch(
             "SELECT * FROM users WHERE org_id = $1", org_id
         )
@@ -121,8 +143,7 @@ async def get_users_by_org(org_id: str) -> List[dict]:
 
 async def update_user_login_time(user_id: str) -> None:
     """更新用户最后登录时间。"""
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         await conn.execute(
             "UPDATE users SET last_login = $1 WHERE id = $2",
             datetime.now(), user_id,
@@ -180,15 +201,13 @@ async def get_records(
     """
     args.extend([limit, offset])
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         rows = await conn.fetch(sql, *args)
         return _rows(rows)
 
 
 async def get_record_by_id(record_id: str) -> Optional[dict]:
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         row = await conn.fetchrow(
             "SELECT * FROM records WHERE id = $1", record_id
         )
@@ -197,8 +216,7 @@ async def get_record_by_id(record_id: str) -> Optional[dict]:
 
 async def insert_record(record: dict) -> dict:
     """插入一条新记录，返回完整记录（含 id）。"""
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         # 处理 created_at：asyncpg 要求 TIMESTAMPTZ 列传入 datetime 对象
         created_at_val = record.get("created_at")
         if isinstance(created_at_val, str):
@@ -254,8 +272,7 @@ async def update_record(record_id: str, updates: dict) -> Optional[dict]:
     args.append(record_id)
 
     sql = f"UPDATE records SET {', '.join(set_parts)} WHERE id = ${idx} RETURNING *"
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         row = await conn.fetchrow(sql, *args)
         return _row_to_dict(row)
 
@@ -276,8 +293,7 @@ async def reject_record(record_id: str) -> Optional[dict]:
 
 async def count_records_by_status(org_id: str = "org_default") -> Dict[str, int]:
     """看板/审核中心用：统计 pending/approved/rejected 数量。"""
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         rows = await conn.fetch(
             "SELECT status, COUNT(*) AS n FROM records WHERE org_id = $1 GROUP BY status",
             org_id,
@@ -290,8 +306,7 @@ async def count_records_by_status(org_id: str = "org_default") -> Dict[str, int]
 # ============================================================
 
 async def get_all_products(org_id: str = "org_default") -> List[dict]:
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         rows = await conn.fetch(
             "SELECT * FROM products WHERE org_id = $1 ORDER BY created_at DESC",
             org_id,
@@ -304,8 +319,7 @@ get_products = get_all_products
 
 
 async def insert_product(product: dict) -> dict:
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         row = await conn.fetchrow(
             """
             INSERT INTO products (id, org_id, code, name, category, cost_price, sale_price, stock, sku)
@@ -337,15 +351,13 @@ async def update_product(product_id: str, updates: dict) -> Optional[dict]:
         idx += 1
     args.append(product_id)
     sql = f"UPDATE products SET {', '.join(set_parts)} WHERE id = ${idx} RETURNING *"
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         row = await conn.fetchrow(sql, *args)
         return _row_to_dict(row)
 
 
 async def delete_product(product_id: str) -> bool:
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         result = await conn.execute("DELETE FROM products WHERE id = $1", product_id)
         return result.endswith(" 1")
 
@@ -361,8 +373,7 @@ async def insert_ai_raw_record(
     user_confirmed: Optional[dict],
     confidence: float,
 ) -> None:
-    pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with _acquire_conn() as conn:
         await conn.execute(
             """
             INSERT INTO ai_raw_records
