@@ -50,7 +50,10 @@ COLUMN_ALIASES = {
 
 
 def read_product_spreadsheet(content: bytes, filename: str) -> pd.DataFrame:
-    """Read an uploaded product spreadsheet into a DataFrame."""
+    """Read an uploaded product spreadsheet into a DataFrame.
+    
+    自动检测表头位置，支持标题行在表头上方的Excel格式。
+    """
     suffix = (filename or "").lower().rsplit(".", 1)[-1]
     buffer = io.BytesIO(content)
 
@@ -58,18 +61,55 @@ def read_product_spreadsheet(content: bytes, filename: str) -> pd.DataFrame:
         for encoding in ("utf-8-sig", "utf-8", "gb18030"):
             buffer.seek(0)
             try:
-                return pd.read_csv(buffer, encoding=encoding)
+                df = pd.read_csv(buffer, encoding=encoding)
+                return _find_header_row_csv(df, buffer, encoding)
             except UnicodeDecodeError:
                 continue
         buffer.seek(0)
         return pd.read_csv(buffer)
 
     if suffix == "xlsx":
-        return pd.read_excel(buffer, engine="openpyxl")
+        df = pd.read_excel(buffer, engine="openpyxl", header=None)
+        return _find_header_row_excel(df, buffer, "openpyxl")
     if suffix == "xls":
-        return pd.read_excel(buffer, engine="xlrd")
+        df = pd.read_excel(buffer, engine="xlrd", header=None)
+        return _find_header_row_excel(df, buffer, "xlrd")
 
     raise ValueError("仅支持 .xlsx、.xls、.csv 文件")
+
+
+def _find_header_row_excel(df: pd.DataFrame, buffer: io.BytesIO, engine: str) -> pd.DataFrame:
+    """智能检测Excel表头位置，跳过标题行"""
+    header_keywords = ["款号", "货号", "SKU", "sku", "商品名称", "品名", "名称", "name", 
+                       "编码", "条码", "code", "商品编码", "商品条码"]
+    
+    for row_idx in range(min(10, len(df))):
+        row = df.iloc[row_idx]
+        row_values = [str(v).strip().lower() if v is not None else "" for v in row]
+        matches = sum(1 for v in row_values for kw in header_keywords if kw.lower() in v)
+        
+        if matches >= 2:
+            buffer.seek(0)
+            return pd.read_excel(buffer, engine=engine, header=row_idx)
+    
+    return df
+
+
+def _find_header_row_csv(df: pd.DataFrame, buffer: io.BytesIO, encoding: str) -> pd.DataFrame:
+    """智能检测CSV表头位置，跳过标题行"""
+    header_keywords = ["款号", "货号", "SKU", "sku", "商品名称", "品名", "名称", "name", 
+                       "编码", "条码", "code", "商品编码", "商品条码"]
+    
+    for row_idx in range(min(10, len(df))):
+        row = df.iloc[row_idx]
+        row_values = [str(v).strip().lower() if v is not None else "" for v in row]
+        matches = sum(1 for v in row_values for kw in header_keywords if kw.lower() in v)
+        
+        if matches >= 2:
+            buffer.seek(0)
+            return pd.read_csv(buffer, encoding=encoding, header=row_idx)
+    
+    return df
 
 
 def normalize_product_columns(df: pd.DataFrame) -> pd.DataFrame:
