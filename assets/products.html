@@ -475,32 +475,61 @@
         function importProducts() {
             const input = document.createElement('input');
             input.type = 'file';
-            input.accept = '.csv';
+            input.accept = '.csv,.xlsx,.xls';
             input.onchange = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 
-                const text = await file.text();
-                const lines = text.split('\n').slice(1);
-                
-                lines.forEach(line => {
-                    const [sku, name, category, cost_price, sale_price, stock] = line.split(',');
-                    if (sku && name) {
-                        products.push({
-                            product_id: 'prod_' + Date.now() + Math.random(),
-                            sku: sku.trim(),
-                            name: name.trim(),
-                            category: category?.trim() || '其他',
+                try {
+                    const text = await file.text();
+                    const lines = text.split('\n').filter(l => l.trim());
+                    
+                    // 跳过表头
+                    const dataLines = lines.slice(1);
+                    let successCount = 0;
+                    let failCount = 0;
+                    
+                    for (const line of dataLines) {
+                        const parts = line.split(',').map(s => s.trim().replace(/[\r\n"]/g, ''));
+                        const [sku, name, category, cost_price, sale_price, stock] = parts;
+                        
+                        if (!sku || !name) { failCount++; continue; }
+                        
+                        const productData = {
+                            sku: sku,
+                            name: name,
+                            category: category || '其他',
                             cost_price: parseFloat(cost_price) || 0,
                             sale_price: parseFloat(sale_price) || 0,
                             stock: parseInt(stock) || 0
-                        });
+                        };
+                        
+                        try {
+                            const resp = await fetch('/api/products', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${token}`
+                                },
+                                body: JSON.stringify(productData)
+                            });
+                            
+                            if (resp.ok) {
+                                successCount++;
+                            } else {
+                                failCount++;
+                            }
+                        } catch (err) {
+                            failCount++;
+                        }
                     }
-                });
-                
-                renderProducts();
-                updateStats();
-                alert('导入成功！');
+                    
+                    // 刷新列表
+                    await loadProducts();
+                    alert(`导入完成：成功 ${successCount} 条，失败 ${failCount} 条`);
+                } catch (error) {
+                    alert('导入失败：' + error.message);
+                }
             };
             input.click();
         }

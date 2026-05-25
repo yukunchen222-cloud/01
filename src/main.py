@@ -540,12 +540,12 @@ async def api_voice_base64(request: Request):
 
 @app.post("/api/upload")
 async def api_upload(file: UploadFile = File(...)):
-    """图片上传API - 上传图片到对象存储"""
-    from coze_coding_dev_sdk import StorageClient
+    """图片/文件上传API - 上传到对象存储并返回URL"""
+    from coze_coding_dev_sdk import S3SyncStorage
     
     try:
         ctx = new_context(method="api_upload")
-        storage_client = StorageClient(ctx=ctx)
+        storage = S3SyncStorage()
         
         # 读取文件内容
         content = await file.read()
@@ -555,19 +555,20 @@ async def api_upload(file: UploadFile = File(...)):
         timestamp = int(time.time() * 1000)
         filename = f"upload_{timestamp}_{file.filename}"
         
-        # 上传到对象存储
-        result = await run_sync(
-            storage_client.put_object,
-            key=f"uploads/{filename}",
-            data=content
-        )
+        # 确定content_type
+        content_type = file.content_type or "application/octet-stream"
         
-        # 获取访问URL
-        url = result.get("url", "")
+        # 上传到对象存储（upload_file 返回 URL 字符串）
+        url = await run_sync(
+            storage.upload_file,
+            file_content=content,
+            file_name=filename,
+            content_type=content_type
+        )
         
         return {"success": True, "url": url, "filename": filename}
     except Exception as e:
-        logger.error(f"图片上传失败: {e}")
+        logger.error(f"文件上传失败: {e}")
         return {"success": False, "error": str(e)}
 
 @app.post("/api/image")
@@ -1526,31 +1527,31 @@ async def upload_voice(file: UploadFile = File(...), store_id: str = ""):
 @app.post("/api/image/upload")
 async def upload_image(file: UploadFile = File(...), store_id: str = ""):
     """图片上传并识别"""
-    from coze_coding_dev_sdk import StorageClient
+    from coze_coding_dev_sdk import S3SyncStorage
     
     try:
         ctx = new_context(method="upload_image")
         
         # 上传图片到对象存储
-        storage_client = StorageClient(ctx=ctx)
+        storage = S3SyncStorage()
         content = await file.read()
         
         import time
         timestamp = int(time.time() * 1000)
         filename = f"upload_{timestamp}_{file.filename}"
+        content_type = file.content_type or "application/octet-stream"
         
-        result = await run_sync(
-            storage_client.put_object,
-            key=f"images/{filename}",
-            data=content
+        image_url = await run_sync(
+            storage.upload_file,
+            file_content=content,
+            file_name=filename,
+            content_type=content_type
         )
-        
-        image_url = result.get("url", "")
         
         # 调用工作流进行OCR识别
         payload = {
             "input_type": "image",
-            "image_url": image_url,
+            "image_file": {"url": image_url, "file_type": "image"},
             "store_id": store_id
         }
         
