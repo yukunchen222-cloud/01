@@ -1733,6 +1733,7 @@ async def recognize_table(request: Request):
 
     body = await request.json()
     image_url: str = body.get("image_url", "")
+    image_base64: str = body.get("image_base64", "")  # 前端直接传base64
     file_url: str = body.get("file_url", "")
     table_text: str = body.get("table_text", "")
     import_type: str = body.get("import_type", "")
@@ -1741,8 +1742,8 @@ async def recognize_table(request: Request):
     direct_rows: list = body.get("rows", [])
     direct_table_type: str = body.get("table_type", "")
 
-    if not image_url and not file_url and not table_text and not direct_rows:
-        raise HTTPException(status_code=400, detail="请提供 image_url、file_url、table_text 或 rows")
+    if not image_url and not image_base64 and not file_url and not table_text and not direct_rows:
+        raise HTTPException(status_code=400, detail="请提供 image_url、image_base64、file_url、table_text 或 rows")
 
     # 如果直接传入了 rows（确认导入步骤），跳过识别
     if direct_rows:
@@ -1822,16 +1823,32 @@ async def recognize_table(request: Request):
                 logger.info(f"使用前端解析的表格数据: {len(table_text)} 字符")
 
             # 1.6 图片OCR：使用 Surya 专业OCR引擎
-            if image_url and not table_text:
+            if (image_url or image_base64) and not table_text:
                 try:
                     from utils.surya_ocr import surya_ocr_async
-                    surya_result = await surya_ocr_async(image_url, languages=["zh", "en"])
+                    import base64 as b64
+                    import tempfile
+                    
+                    # 处理base64图片：保存为临时文件
+                    ocr_image_url = image_url
+                    if image_base64 and not image_url:
+                        # 去掉data:image/xxx;base64,前缀
+                        base64_data = image_base64
+                        if "," in base64_data:
+                            base64_data = base64_data.split(",")[1]
+                        img_bytes = b64.b64decode(base64_data)
+                        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                            tmp.write(img_bytes)
+                            ocr_image_url = f"file://{tmp.name}"
+                            logger.info(f"base64图片已保存到临时文件: {tmp.name}")
+                    
+                    surya_result = await surya_ocr_async(ocr_image_url, languages=["zh", "en"])
                     if surya_result.get("success") and surya_result.get("text"):
                         text_content = f"图片OCR识别结果：\n{surya_result['text']}"
                         logger.info(f"Surya OCR成功: {len(surya_result.get('lines', []))}行文本")
                     else:
                         logger.warning(f"Surya OCR失败: {surya_result.get('error', '未知错误')}")
-                        # 降级：保留 image_url 让多模态LLM直接处理
+                        # 降级：保留 image_base64 让多模态LLM直接处理
                 except Exception as ex:
                     logger.warning(f"Surya OCR异常: {ex}，降级使用多模态LLM")
 
@@ -1890,6 +1907,15 @@ async def recognize_table(request: Request):
                 user_parts.append({
                     "type": "image_url",
                     "image_url": {"url": image_url}
+                })
+            elif image_base64:
+                # 确保 base64 格式正确
+                img_url = image_base64
+                if not img_url.startswith("data:"):
+                    img_url = f"data:image/png;base64,{image_base64}"
+                user_parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": img_url}
                 })
 
             client = LLMClient()

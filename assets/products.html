@@ -910,17 +910,14 @@
                     console.log('表格预览:', requestBody.table_text.substring(0, 500));
                     
                 } else if (isImage) {
-                    // ===== 图片：上传后识别 =====
-                    var formData = new FormData();
-                    formData.append('file', file);
-                    var uploadResp = await fetch('/api/upload', {
-                        method: 'POST',
-                        headers: { 'Authorization': 'Bearer ' + token },
-                        body: formData
+                    // ===== 图片：直接转base64识别 =====
+                    var base64 = await new Promise(function(resolve, reject) {
+                        var reader = new FileReader();
+                        reader.onload = function() { resolve(reader.result); };
+                        reader.onerror = function() { reject(new Error('图片读取失败')); };
+                        reader.readAsDataURL(file);
                     });
-                    var uploadData = await uploadResp.json();
-                    if (!uploadData.url) throw new Error('图片上传失败');
-                    requestBody.image_url = uploadData.url;
+                    requestBody.image_base64 = base64;
                 } else {
                     throw new Error('不支持的文件格式，请上传图片或Excel文件');
                 }
