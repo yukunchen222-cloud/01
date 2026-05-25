@@ -326,12 +326,50 @@ async def get_all_products(org_id: str = "org_default") -> List[dict]:
 get_products = get_all_products
 
 
-async def insert_product(product: dict) -> dict:
-    # 自动生成 id（如果未提供）
-    if not product.get("id"):
-        import uuid
-        product["id"] = "prod_" + uuid.uuid4().hex[:16]
+async def insert_product(product: dict, merge_duplicate_sku: bool = False) -> dict:
+    """插入商品，可选合并重复款号（SKU相同时库存累加）
+    
+    Args:
+        product: 商品数据字典
+        merge_duplicate_sku: 是否合并重复款号（True时SKU相同则库存累加）
+    
+    Returns:
+        插入/更新后的商品数据，包含 _action 字段表示操作类型
+    """
+    import uuid
+    org_id = product.get("org_id", "org_default")
+    sku = product.get("sku") or product.get("code", "")
+    
     async with _acquire_conn() as conn:
+        # 检查是否存在相同SKU
+        if merge_duplicate_sku and sku:
+            existing = await conn.fetchrow(
+                "SELECT * FROM products WHERE org_id = $1 AND (sku = $2 OR code = $2)",
+                org_id, sku
+            )
+            if existing:
+                # SKU已存在，库存累加
+                new_stock = int(existing["stock"] or 0) + int(product.get("stock", 0))
+                row = await conn.fetchrow(
+                    """
+                    UPDATE products 
+                    SET stock = $1, updated_at = NOW()
+                    WHERE id = $2
+                    RETURNING *
+                    """,
+                    new_stock, existing["id"]
+                )
+                result = _row_to_dict(row)
+                if result and "id" in result and "product_id" not in result:
+                    result["product_id"] = result["id"]
+                result["_action"] = "merged"  # 标记为合并
+                result["_merged_stock"] = int(product.get("stock", 0))  # 本次合并的库存量
+                return result
+        
+        # 新增商品
+        if not product.get("id"):
+            product["id"] = "prod_" + uuid.uuid4().hex[:16]
+        
         row = await conn.fetchrow(
             """
             INSERT INTO products (id, org_id, code, name, category, cost_price, sale_price, stock, sku)
@@ -339,18 +377,19 @@ async def insert_product(product: dict) -> dict:
             RETURNING *
             """,
             product.get("id"),
-            product.get("org_id", "org_default"),
+            org_id,
             product.get("code") or product.get("sku"),
             product.get("name"),
             product.get("category"),
             float(product.get("cost_price", 0)),
             float(product.get("sale_price", 0)),
             int(product.get("stock", 0)),
-            product.get("sku", ""),
+            sku,
         )
         result = _row_to_dict(row)
         if result and "id" in result and "product_id" not in result:
             result["product_id"] = result["id"]
+        result["_action"] = "created"  # 标记为新增
         return result
 
 

@@ -1741,6 +1741,7 @@ async def recognize_table(request: Request):
     store_id: str = body.get("store_id", "")
     direct_rows: list = body.get("rows", [])
     direct_table_type: str = body.get("table_type", "")
+    merge_duplicate: bool = body.get("merge_duplicate", True)  # 合并重复款号（库存累加）
 
     if not image_url and not image_base64 and not file_url and not table_text and not direct_rows:
         raise HTTPException(status_code=400, detail="请提供 image_url、image_base64、file_url、table_text 或 rows")
@@ -1983,10 +1984,11 @@ async def recognize_table(request: Request):
         from storage.database import repository as repo
 
         imported_count: int = 0
+        merged_count: int = 0  # 合并的商品数
         for row in rows:
             try:
                 if import_type == "products" or table_type == "products":
-                    await repo.insert_product({
+                    result = await repo.insert_product({
                         "org_id": org_id,
                         "sku": row.get("sku", ""),
                         "name": row.get("name", ""),
@@ -1994,8 +1996,10 @@ async def recognize_table(request: Request):
                         "cost_price": float(row.get("cost_price", 0) or 0),
                         "sale_price": float(row.get("sale_price", 0) or 0),
                         "stock": int(row.get("stock", 0) or 0),
-                    })
+                    }, merge_duplicate=merge_duplicate)
                     imported_count += 1
+                    if result and result.get("merged"):
+                        merged_count += 1
                 elif import_type == "records" or table_type == "records":
                     items: list = [{
                         "name": row.get("name", ""),
@@ -2020,6 +2024,8 @@ async def recognize_table(request: Request):
                 logger.warning(f"导入行失败: {ex}, row={row}")
 
         result["imported"] = imported_count
+        if import_type == "products" or table_type == "products":
+            result["merged"] = merged_count
 
     return result
 

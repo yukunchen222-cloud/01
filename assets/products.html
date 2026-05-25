@@ -529,6 +529,14 @@
                     </select>
                 </div>
 
+                <div class="form-group" id="mergeOptionGroup">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="mergeDuplicate" checked>
+                        <span>智能合并：同款号自动累加库存</span>
+                    </label>
+                    <small class="form-hint">开启后，相同款号的商品将自动合并，库存相加；关闭则新建独立商品</small>
+                </div>
+
                 <div id="recognizeResult" style="display:none;" class="recognize-result-box"></div>
             </div>
             <div class="modal-foot">
@@ -969,14 +977,25 @@
 
             try {
                 var importType = document.getElementById('recognizeImportType').value;
+                var mergeDuplicate = document.getElementById('mergeDuplicate').checked;
                 var resp = await fetch('/api/table/recognize', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify({ import_type: importType, rows: recognizedRows, table_type: recognizedType, org_id: 'org_default' })
+                    body: JSON.stringify({ 
+                        import_type: importType, 
+                        rows: recognizedRows, 
+                        table_type: recognizedType, 
+                        org_id: 'org_default',
+                        merge_duplicate: mergeDuplicate
+                    })
                 });
                 var result = await resp.json();
                 if (result.success) {
-                    alert('导入成功！共导入 ' + result.imported + ' 条数据');
+                    var msg = '导入成功！共导入 ' + result.imported + ' 条数据';
+                    if (result.merged > 0) {
+                        msg += '\\n其中 ' + result.merged + ' 条为重复款号，已合并库存';
+                    }
+                    alert(msg);
                     closeRecognizeModal();
                     await loadProducts();
                 } else {
