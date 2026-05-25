@@ -7,6 +7,7 @@
 import json
 import logging
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Optional, List, Dict
 import asyncpg
 
@@ -20,16 +21,29 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 def _row_to_dict(row: asyncpg.Record) -> Optional[dict]:
-    """把 asyncpg.Record 转成普通 dict，处理 JSONB/datetime。"""
+    """把 asyncpg.Record 转成普通 dict，统一处理 PG 类型。
+
+    asyncpg 返回的特殊类型必须在这一层转干净，否则下游 Python 算术会报错：
+    - NUMERIC  → decimal.Decimal  → float
+    - REAL/FP  → float（保留 2 位，规避精度泄漏如 0.800000011920929）
+    - JSONB    → 已是 dict/list，但旧表存成字符串时手动 json.loads
+    - TIMESTAMPTZ → datetime → ISO 字符串
+    """
     if row is None:
         return None
     d: dict = dict(row)
-    # datetime → ISO 字符串
     for k, v in d.items():
-        if isinstance(v, datetime):
+        if v is None:
+            continue
+        if isinstance(v, Decimal):
+            # 金额类全部转 float，否则 main.py 里 Decimal * float 会 500
+            d[k] = float(v)
+        elif isinstance(v, float) and k in ("confidence",):
+            # REAL 列存到 32 位浮点会有精度泄漏，前端展示也乱
+            d[k] = round(v, 2)
+        elif isinstance(v, datetime):
             d[k] = v.isoformat()
         elif isinstance(v, str) and k == "items":
-            # 旧 JSONB 字段从字符串解出来
             try:
                 d[k] = json.loads(v)
             except Exception:
