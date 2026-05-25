@@ -1610,6 +1610,71 @@ async def export_report(request: Request):
         logger.error(f"报告导出失败: {e}")
         return {"success": False, "error": str(e)}
 
+# ==================== Surya OCR API ====================
+
+@app.post("/api/ocr/image")
+async def ocr_image(request: Request):
+    """
+    Surya OCR 图片识别接口
+    
+    使用专业的 Surya OCR 引擎识别图片中的文字和表格。
+    支持中英文混合、表格结构识别。
+    
+    Body:
+        image_url: 图片URL
+        languages: 语言列表，默认 ["zh", "en"]
+    
+    Returns:
+        {
+            "success": true,
+            "text": "识别的完整文本",
+            "lines": [{"text": "行文本", "bbox": [x1,y1,x2,y2]}, ...],
+            "markdown": "表格Markdown格式（如果检测到表格）"
+        }
+    """
+    try:
+        body = await request.json()
+        image_url = body.get("image_url", "")
+        languages = body.get("languages", ["zh", "en"])
+        
+        if not image_url:
+            raise HTTPException(status_code=400, detail="请提供 image_url")
+        
+        from utils.surya_ocr import surya_ocr_async, surya_table_async
+        
+        # 执行 OCR
+        ocr_result = await surya_ocr_async(image_url, languages)
+        
+        if not ocr_result.get("success"):
+            return {
+                "success": False,
+                "error": ocr_result.get("error", "OCR识别失败"),
+                "text": "",
+                "lines": []
+            }
+        
+        # 尝试检测表格结构
+        try:
+            table_result = await surya_table_async(image_url)
+            markdown = table_result.get("markdown", "") if table_result.get("success") else ""
+        except Exception:
+            markdown = ""
+        
+        return {
+            "success": True,
+            "text": ocr_result.get("text", ""),
+            "lines": ocr_result.get("lines", []),
+            "markdown": markdown,
+            "line_count": len(ocr_result.get("lines", []))
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"OCR识别失败: {e}")
+        return {"success": False, "error": str(e), "text": "", "lines": []}
+
+
 # ==================== 飞书通知API ====================
 
 @app.post("/api/notify/feishu")
@@ -1755,6 +1820,20 @@ async def recognize_table(request: Request):
             if table_text:
                 text_content = f"表格数据：\n{table_text}"
                 logger.info(f"使用前端解析的表格数据: {len(table_text)} 字符")
+
+            # 1.6 图片OCR：使用 Surya 专业OCR引擎
+            if image_url and not table_text:
+                try:
+                    from utils.surya_ocr import surya_ocr_async
+                    surya_result = await surya_ocr_async(image_url, languages=["zh", "en"])
+                    if surya_result.get("success") and surya_result.get("text"):
+                        text_content = f"图片OCR识别结果：\n{surya_result['text']}"
+                        logger.info(f"Surya OCR成功: {len(surya_result.get('lines', []))}行文本")
+                    else:
+                        logger.warning(f"Surya OCR失败: {surya_result.get('error', '未知错误')}")
+                        # 降级：保留 image_url 让多模态LLM直接处理
+                except Exception as ex:
+                    logger.warning(f"Surya OCR异常: {ex}，降级使用多模态LLM")
 
             # 2. 构造多模态消息
             system_prompt: str = """你是服装连锁店的表格识别专家。用户会上传一张表格图片或一段表格文本，你需要精确识别其中所有数据。
