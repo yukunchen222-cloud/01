@@ -797,24 +797,29 @@
                     var workbook = XLSX.read(arrayBuffer, { type: 'array' });
                     var sheetName = workbook.SheetNames[0];
                     var worksheet = workbook.Sheets[sheetName];
-                    var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
                     
                     if (jsonData.length < 2) throw new Error('Excel数据不足');
                     
-                    // 第一行作为表头，后面是数据
-                    var headers = jsonData[0];
-                    var rows = [];
-                    for (var i = 1; i < jsonData.length; i++) {
-                        var row = {};
-                        for (var j = 0; j < headers.length; j++) {
-                            row[headers[j]] = jsonData[i][j];
-                        }
-                        rows.push(row);
+                    // 构建 Markdown 表格格式（LLM更容易识别）
+                    var headers = jsonData[0].map(function(h) { return String(h || '').trim(); });
+                    var tableLines = [];
+                    // 表头行
+                    tableLines.push('| ' + headers.join(' | ') + ' |');
+                    // 分隔行
+                    tableLines.push('| ' + headers.map(function() { return '---'; }).join(' | ') + ' |');
+                    // 数据行
+                    for (var i = 1; i < jsonData.length && i <= 100; i++) { // 最多100行
+                        var cells = jsonData[i].map(function(cell) { 
+                            return String(cell !== undefined && cell !== null ? cell : '').trim(); 
+                        });
+                        tableLines.push('| ' + cells.join(' | ') + ' |');
                     }
                     
-                    // 发送解析后的数据给后端识别
-                    requestBody.table_text = JSON.stringify(rows, null, 2);
+                    requestBody.table_text = tableLines.join('\n');
                     requestBody.table_type = importType;
+                    console.log('解析Excel:', headers.length, '列', jsonData.length - 1, '行');
+                    console.log('表格预览:', requestBody.table_text.substring(0, 500));
                     
                 } else if (isImage) {
                     // ===== 图片：上传后识别 =====

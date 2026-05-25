@@ -1751,9 +1751,10 @@ async def recognize_table(request: Request):
                     except Exception as ex:
                         logger.warning(f"文件提取失败: {ex}")
 
-            # 1.5 处理前端传来的已解析表格文本
-            if table_text and not text_content:
-                text_content = f"表格数据（JSON格式）：\n{table_text}"
+            # 1.5 处理前端传来的已解析表格文本（优先使用）
+            if table_text:
+                text_content = f"表格数据：\n{table_text}"
+                logger.info(f"使用前端解析的表格数据: {len(table_text)} 字符")
 
             # 2. 构造多模态消息
             system_prompt: str = """你是服装连锁店的表格识别专家。用户会上传一张表格图片或一段表格文本，你需要精确识别其中所有数据。
@@ -1794,12 +1795,16 @@ async def recognize_table(request: Request):
             user_parts: list = []
             file_hint: str = ""
             if text_content:
-                truncated: str = text_content[:3000]
-                file_hint = f"\n\n以下是提取的文件文本内容：\n{truncated}"
+                # 增加 字符限制，支持更多表格数据
+                max_chars: int = 8000
+                truncated: str = text_content[:max_chars]
+                if len(text_content) > max_chars:
+                    truncated += f"\n... (已截断，共{len(text_content)}字符)"
+                file_hint = f"\n\n以下是表格数据（Markdown格式）：\n{truncated}"
 
             user_parts.append({
                 "type": "text",
-                "text": f"请识别这个表格中的所有数据，返回结构化JSON。{file_hint}"
+                "text": f"请仔细识别表格中的所有行和列，返回完整的结构化JSON。{file_hint}"
             })
 
             if image_url:
