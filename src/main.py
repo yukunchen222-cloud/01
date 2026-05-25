@@ -1420,6 +1420,106 @@ async def delete_product_api(product_id: str):
         logger.error(f"删除商品失败: {e}")
         return {"success": False, "message": str(e)}
 
+
+@app.post("/api/products/import")
+async def import_products_api(request: Request):
+    """批量导入商品（Excel文件）"""
+    import pandas as pd
+    import io
+    from utils.auth import decode_token
+    
+    try:
+        # 获取认证信息
+        auth_header = request.headers.get("Authorization", "")
+        org_id = "org_default"
+        
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            payload = decode_token(token)
+            if payload:
+                org_id = payload.get("org_id", org_id)
+        
+        # 获取查询参数
+        merge_duplicates = request.query_params.get("merge_duplicates", "false").lower() == "true"
+        
+        # 读取上传的文件
+        form = await request.form()
+        file = form.get("file")
+        if not file:
+            return {"success": False, "message": "未找到上传文件"}
+        
+        # 读取文件内容
+        content = await file.read()
+        filename = file.filename or "unknown.xlsx"
+        
+        # 根据文件扩展名选择解析方式
+        if filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(content))
+        else:
+            # 支持 .xlsx 和 .xls
+            df = pd.read_excel(io.BytesIO(content), engine='openpyxl' if filename.endswith('.xlsx') else 'xlrd')
+        
+        logger.info(f"Excel解析成功，共{len(df)}行，列名: {list(df.columns)}")
+        
+        # 列名映射（支持多种中文列名）
+        column_mapping = {
+            '款号': 'sku', 'SKU': 'sku', 'sku': 'sku', '货号': 'sku',
+            '商品名称': 'name', '名称': 'name', '品名': 'name', 'name': 'name',
+            '类目': 'category', '分类': 'category', '类别': 'category', 'category': 'category',
+            '进价': 'cost_price', '成本价': 'cost_price', 'cost_price': 'cost_price',
+            '售价': 'sale_price', '单价': 'sale_price', 'sale_price': 'sale_price',
+            '库存': 'stock', '数量': 'stock', 'stock': 'stock'
+        }
+        
+        # 重命名列
+        df.columns = [column_mapping.get(str(col).strip(), str(col).strip()) for col in df.columns]
+        
+        success_count = 0
+        fail_count = 0
+        errors = []
+        
+        for idx, row in df.iterrows():
+            try:
+                sku = str(row.get('sku', '')).strip() if pd.notna(row.get('sku')) else ''
+                name = str(row.get('name', '')).strip() if pd.notna(row.get('name')) else ''
+                
+                if not sku or not name or sku == 'nan' or name == 'nan':
+                    fail_count += 1
+                    errors.append(f"第{idx+1}行: 款号或名称为空")
+                    continue
+                
+                product_data = {
+                    "org_id": org_id,
+                    "sku": sku,
+                    "name": name,
+                    "category": str(row.get('category', '其他')).strip() if pd.notna(row.get('category')) else '其他',
+                    "cost_price": float(row.get('cost_price', 0) or 0),
+                    "sale_price": float(row.get('sale_price', 0) or 0),
+                    "stock": int(float(row.get('stock', 0) or 0))
+                }
+                
+                await repo.insert_product(product_data, merge_duplicate_sku=merge_duplicates)
+                success_count += 1
+                
+            except Exception as e:
+                fail_count += 1
+                errors.append(f"第{idx+1}行: {str(e)}")
+        
+        logger.info(f"导入完成: 成功{success_count}条, 失败{fail_count}条")
+        
+        return {
+            "success": True,
+            "message": f"导入完成：成功 {success_count} 条，失败 {fail_count} 条",
+            "success_count": success_count,
+            "fail_count": fail_count,
+            "errors": errors[:10]  # 只返回前10个错误
+        }
+        
+    except Exception as e:
+        logger.error(f"Excel导入失败: {e}")
+        return {"success": False, "message": f"导入失败: {str(e)}"}
+
+
 # ==================== 静态页面路由 ====================
 
 @app.get("/login.html", response_class=HTMLResponse)
