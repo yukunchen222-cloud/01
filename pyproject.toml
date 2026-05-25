@@ -38,6 +38,7 @@ dependencies = [
     "chardet>=5.2,<6",
     "python-multipart>=0.0.29",
     "pyjwt>=2.11",
+    "asyncpg>=0.31.0",
 ]
 
 [tool.uv]
