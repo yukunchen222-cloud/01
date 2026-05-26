@@ -814,10 +814,60 @@
                     })
                 });
                 const result = await resp.json();
+                
                 if (result.success) {
-                    alert('✅ 记账成功！' + (result.record?.status === 'pending' ? '\n等待老板审核' : ''));
-                    closeVoiceModal();
-                    loadTodaySummary();
+                    // 处理库存警告
+                    if (result.stock_warning && result.stock_warning.length > 0) {
+                        const warnings = result.stock_warning.map(w => 
+                            `⚠️ ${w.item_name}: 需要${w.needed}件，库存仅剩${w.available}件`
+                        ).join('\n');
+                        
+                        const confirmed = confirm(`❌ 库存不足警告！\n\n${warnings}\n\n这可能是账记错了。\n\n是否仍要强制记录？`);
+                        
+                        if (confirmed) {
+                            // 强制提交
+                            const forceResp = await fetch('/api/records/force', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                body: JSON.stringify({
+                                    org_id: 'org_default',
+                                    store_id: storeId,
+                                    store_name: user.store_name || '我的门店',
+                                    type: extracted.data_type || 'revenue',
+                                    category: (fields.items && fields.items[0] && fields.items[0].category) || '',
+                                    items: fields.items || [],
+                                    total_amount: fields.total_amount || 0,
+                                    confidence: extracted.confidence || 0.8,
+                                    status: 'approved',
+                                    operator: user.name || '',
+                                    force_deduct: true
+                                })
+                            });
+                            const forceResult = await forceResp.json();
+                            if (forceResult.success) {
+                                alert('⚠️ 已强制记录！\n库存已扣减（可能出现负库存）\n请核实账目。');
+                                closeVoiceModal();
+                                loadTodaySummary();
+                            } else {
+                                alert('❌ 强制提交失败: ' + (forceResult.message || ''));
+                            }
+                        }
+                    } else {
+                        // 正常成功
+                        let msg = '✅ 记账成功！';
+                        if (result.stock_deductions && result.stock_deductions.length > 0) {
+                            msg += '\n\n库存已自动扣减：';
+                            result.stock_deductions.forEach(d => {
+                                msg += `\n${d.product_name}: ${d.old_stock} → ${d.new_stock}`;
+                            });
+                        }
+                        if (result.record?.status === 'pending') {
+                            msg += '\n\n等待老板审核';
+                        }
+                        alert(msg);
+                        closeVoiceModal();
+                        loadTodaySummary();
+                    }
                 } else {
                     alert('❌ 提交失败: ' + (result.message || ''));
                 }

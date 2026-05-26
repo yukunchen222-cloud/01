@@ -654,34 +654,208 @@ async def get_records(
 
 @app.post("/api/records")
 async def create_record(request: Request):
-    """创建交易记录（确认提交）- 需要登录"""
+    """创建交易记录（确认提交）- 需要登录，自动扣减库存"""
     user = await get_current_user(request)
     if not user:
         return {"success": False, "error": "未登录，请先登录"}
     
     try:
         data = await request.json()
+        org_id = data.get("org_id", "org_default")
+        items = data.get("items", [])
+        record_type = data.get("type", "revenue")
+        
+        # 库存校验和扣减（仅销售类型记录）
+        stock_warnings = []
+        stock_deductions = []
+        
+        if record_type == "revenue" and items:
+            # 获取商品库所有商品
+            all_products = await repo.get_products(org_id)
+            products_map = {p.get("sku", ""): p for p in all_products}
+            products_by_name = {p.get("name", ""): p for p in all_products}
+            
+            for item in items:
+                item_name = item.get("name", "")
+                item_sku = item.get("sku", "")
+                item_qty = int(item.get("quantity", 0))
+                
+                # 尝试匹配商品（优先SKU，其次名称）
+                product = None
+                if item_sku and item_sku in products_map:
+                    product = products_map[item_sku]
+                elif item_name and item_name in products_by_name:
+                    product = products_by_name[item_name]
+                elif item_name:
+                    # 模糊匹配：商品名称包含或被包含
+                    for p in all_products:
+                        pname = p.get("name", "")
+                        if item_name in pname or pname in item_name:
+                            product = p
+                            break
+                
+                if product:
+                    product_id = product.get("product_id") or product.get("id")
+                    current_stock = int(product.get("stock", 0))
+                    product_name = product.get("name", item_name)
+                    sku = product.get("sku", item_sku)
+                    
+                    # 更新item的SKU信息
+                    item["sku"] = sku
+                    item["matched_product"] = product_name
+                    
+                    if current_stock < item_qty:
+                        # 库存不足
+                        stock_warnings.append({
+                            "product_name": product_name,
+                            "sku": sku,
+                            "requested": item_qty,
+                            "available": current_stock,
+                            "shortage": item_qty - current_stock,
+                            "message": f"「{product_name}」库存不足！需要{item_qty}件，当前库存{current_stock}件，缺少{item_qty - current_stock}件"
+                        })
+                    else:
+                        # 可以扣减
+                        stock_deductions.append({
+                            "product_id": product_id,
+                            "product_name": product_name,
+                            "sku": sku,
+                            "deduct_qty": item_qty,
+                            "old_stock": current_stock,
+                            "new_stock": current_stock - item_qty
+                        })
+                else:
+                    # 商品库中未找到
+                    stock_warnings.append({
+                        "product_name": item_name,
+                        "sku": item_sku,
+                        "requested": item_qty,
+                        "available": 0,
+                        "shortage": item_qty,
+                        "not_found": True,
+                        "message": f"「{item_name}」在商品库中未找到，请先添加该商品"
+                    })
+        
+        # 如果有库存问题，返回警告让前端确认
+        if stock_warnings:
+            return {
+                "success": False,
+                "need_confirm": True,
+                "stock_warnings": stock_warnings,
+                "stock_deductions": stock_deductions,
+                "message": "库存校验发现问题，请检查后确认",
+                "error_type": "stock_insufficient"
+            }
+        
+        # 执行库存扣减
+        for deduction in stock_deductions:
+            await repo.update_product(deduction["product_id"], {
+                "stock": deduction["new_stock"]
+            })
+            logger.info(f"库存扣减: {deduction['product_name']} {deduction['old_stock']} -> {deduction['new_stock']}")
         
         # 构建新记录
         new_record = {
-            "org_id": data.get("org_id", "org_default"),
+            "org_id": org_id,
             "store_id": data.get("store_id", ""),
             "store_name": data.get("store_name", ""),
-            "type": data.get("type", "revenue"),
+            "type": record_type,
             "category": data.get("category", ""),
-            "items": data.get("items", []),
+            "items": items,
             "total_amount": float(data.get("total_amount", 0)),
             "payment_method": data.get("payment_method", ""),
             "confidence": float(data.get("confidence", 0.8)),
             "status": data.get("status", "pending"),
             "operator": data.get("operator", ""),
-            "created_at": data.get("created_at", time.strftime("%Y-%m-%d %H:%M:%S"))
+            "created_at": data.get("created_at", time.strftime("%Y-%m-%d %H:%M:%S")),
+            "stock_deducted": len(stock_deductions) > 0  # 标记是否已扣减库存
         }
         
         saved = await _save_record(new_record)
-        return {"success": True, "record": saved}
+        return {"success": True, "record": saved, "stock_deductions": stock_deductions}
     except Exception as e:
         logger.error(f"创建记录失败: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.post("/api/records/force")
+async def create_record_force(request: Request):
+    """强制创建记录（忽略库存警告）- 需要登录"""
+    user = await get_current_user(request)
+    if not user:
+        return {"success": False, "error": "未登录，请先登录"}
+    
+    try:
+        data = await request.json()
+        org_id = data.get("org_id", "org_default")
+        items = data.get("items", [])
+        force_deduct = data.get("force_deduct", True)  # 是否强制扣减（可能导致负库存）
+        
+        # 如果需要强制扣减库存
+        stock_deductions = []
+        if force_deduct and items:
+            all_products = await repo.get_products(org_id)
+            products_map = {p.get("sku", ""): p for p in all_products}
+            products_by_name = {p.get("name", ""): p for p in all_products}
+            
+            for item in items:
+                item_name = item.get("name", "")
+                item_sku = item.get("sku", "")
+                item_qty = int(item.get("quantity", 0))
+                
+                product = None
+                if item_sku and item_sku in products_map:
+                    product = products_map[item_sku]
+                elif item_name and item_name in products_by_name:
+                    product = products_by_name[item_name]
+                elif item_name:
+                    for p in all_products:
+                        pname = p.get("name", "")
+                        if item_name in pname or pname in item_name:
+                            product = p
+                            break
+                
+                if product:
+                    product_id = product.get("product_id") or product.get("id")
+                    current_stock = int(product.get("stock", 0))
+                    new_stock = current_stock - item_qty
+                    
+                    # 强制扣减（可能变成负数）
+                    await repo.update_product(product_id, {"stock": new_stock})
+                    item["sku"] = product.get("sku", item_sku)
+                    stock_deductions.append({
+                        "product_name": product.get("name", item_name),
+                        "old_stock": current_stock,
+                        "new_stock": new_stock
+                    })
+                    logger.warning(f"强制库存扣减: {product.get('name')} {current_stock} -> {new_stock}")
+        
+        # 构建记录
+        new_record = {
+            "org_id": org_id,
+            "store_id": data.get("store_id", ""),
+            "store_name": data.get("store_name", ""),
+            "type": data.get("type", "revenue"),
+            "category": data.get("category", ""),
+            "items": items,
+            "total_amount": float(data.get("total_amount", 0)),
+            "payment_method": data.get("payment_method", ""),
+            "confidence": float(data.get("confidence", 0.8)),
+            "status": "pending",
+            "operator": data.get("operator", ""),
+            "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "stock_deducted": len(stock_deductions) > 0,
+            "forced": True  # 标记为强制提交
+        }
+        
+        saved = await _save_record(new_record)
+        return {
+            "success": True, 
+            "record": saved, 
+            "stock_deductions": stock_deductions,
+            "message": "已强制记录，库存已扣减（可能出现负库存）"
+        }
+    except Exception as e:
+        logger.error(f"强制创建记录失败: {e}")
         return {"success": False, "message": str(e)}
 
 @app.put("/api/records/{record_id}/approve")
