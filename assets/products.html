@@ -448,6 +448,14 @@
 
         <!-- 工具栏 -->
         <div class="toolbar">
+            <select id="storeSelect" class="store-select" onchange="changeStore()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #ddd; font-size: 14px; min-width: 120px;">
+                <option value="">全部店铺</option>
+                <option value="store_001">店铺1</option>
+                <option value="store_002">店铺2</option>
+                <option value="store_003">店铺3</option>
+                <option value="store_004">店铺4</option>
+                <option value="store_005">店铺5</option>
+            </select>
             <input type="text" class="search-input" id="searchInput" placeholder="搜款号、商品名、类目..." onkeyup="filterProducts()" style="width: 240px;">
             <div class="toolbar-divider"></div>
             <button class="btn btn-primary" onclick="openAddModal()">＋ 添加商品</button>
@@ -751,7 +759,9 @@
             document.getElementById('loadingState').style.display = '';
             document.getElementById('emptyState').style.display = 'none';
             try {
-                const response = await fetch('/api/products', {
+                const storeId = document.getElementById('storeSelect').value;
+                const url = storeId ? `/api/products?store_id=${storeId}` : '/api/products';
+                const response = await fetch(url, {
                     headers: { 'Authorization': 'Bearer ' + token }
                 });
                 const data = await response.json();
@@ -763,6 +773,10 @@
             document.getElementById('loadingState').style.display = 'none';
             renderProducts();
             updateStats();
+        }
+        
+        function changeStore() {
+            loadProducts();
         }
 
         function formatTime(isoString) {
@@ -902,13 +916,15 @@
         async function saveProduct(e) {
             e.preventDefault();
             var id = document.getElementById('productId').value;
+            var storeId = document.getElementById('storeSelect').value;
             var productData = {
                 sku: document.getElementById('productSku').value,
                 name: document.getElementById('productName').value,
                 category: document.getElementById('productCategory').value,
                 cost_price: parseFloat(document.getElementById('productCost').value) || 0,
                 sale_price: parseFloat(document.getElementById('productPrice').value) || 0,
-                stock: parseInt(document.getElementById('productStock').value) || 0
+                stock: parseInt(document.getElementById('productStock').value) || 0,
+                store_id: storeId
             };
 
             try {
@@ -978,12 +994,13 @@
                 if (!file) return;
                 var token = localStorage.getItem('token');
                 var mergeDuplicate = document.getElementById('mergeDuplicate') ? document.getElementById('mergeDuplicate').checked : true;
+                var storeId = currentStoreId || 'store_001';
                 
                 try {
                     var formData = new FormData();
                     formData.append('file', file);
                     
-                    var resp = await fetch('/api/products/import?merge_duplicates=' + mergeDuplicate, {
+                    var resp = await fetch('/api/products/import?merge_duplicates=' + mergeDuplicate + '&store_id=' + storeId, {
                         method: 'POST',
                         headers: { 'Authorization': 'Bearer ' + token },
                         body: formData

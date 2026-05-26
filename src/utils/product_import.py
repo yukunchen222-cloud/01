@@ -119,7 +119,7 @@ def normalize_product_columns(df: pd.DataFrame) -> pd.DataFrame:
     return normalized
 
 
-def build_product_from_row(row: Any, org_id: str) -> dict:
+def build_product_from_row(row: Any, org_id: str, store_id: str = "store_001") -> dict:
     """Build a product payload from a normalized pandas row."""
     sku = _cell_to_str(row.get("sku", ""))
     name = _cell_to_str(row.get("name", ""))
@@ -128,6 +128,7 @@ def build_product_from_row(row: Any, org_id: str) -> dict:
 
     return {
         "org_id": org_id,
+        "store_id": store_id,
         "sku": sku,
         "name": name,
         "category": _cell_to_str(row.get("category", "")) or "其他",

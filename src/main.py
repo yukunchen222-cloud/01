@@ -670,8 +670,11 @@ async def create_record(request: Request):
         stock_deductions = []
         
         if record_type == "revenue" and items:
-            # 获取商品库所有商品
-            all_products = await repo.get_products(org_id)
+            # 获取销售店铺ID
+            sale_store_id = data.get("store_id", "store_001")
+            
+            # 获取该店铺的商品库商品
+            all_products = await repo.get_products(org_id, store_id=sale_store_id)
             products_map = {p.get("sku", ""): p for p in all_products}
             products_by_name = {p.get("name", ""): p for p in all_products}
             
@@ -1512,7 +1515,7 @@ async def api_logout():
 # ==================== 商品管理API ====================
 
 @app.get("/api/products")
-async def get_products(request: Request):
+async def get_products(request: Request, store_id: str = None):
     """获取商品列表（asyncpg 异步查询）"""
     from utils.auth import decode_token
     
@@ -1526,7 +1529,7 @@ async def get_products(request: Request):
             org_id = payload.get("org_id", org_id)
     
     try:
-        products = await repo.get_products(org_id)
+        products = await repo.get_products(org_id, store_id)
         return {"success": True, "products": products, "total": len(products)}
     except Exception as e:
         logger.error(f"数据库查询商品失败: {e}")
@@ -1641,6 +1644,7 @@ async def import_products_api(request: Request):
         
         # 获取查询参数
         merge_duplicates = request.query_params.get("merge_duplicates", "false").lower() == "true"
+        store_id = request.query_params.get("store_id", "store_001")
         
         # 读取上传的文件
         form = await request.form()
@@ -1663,7 +1667,7 @@ async def import_products_api(request: Request):
         
         for idx, row in df.iterrows():
             try:
-                product_data = build_product_from_row(row, org_id)
+                product_data = build_product_from_row(row, org_id, store_id)
                 await repo.insert_product(product_data, merge_duplicate_sku=merge_duplicates)
                 success_count += 1
                 

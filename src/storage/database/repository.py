@@ -308,12 +308,18 @@ async def count_records_by_status(org_id: str = "org_default") -> Dict[str, int]
 # Products 商品库
 # ============================================================
 
-async def get_all_products(org_id: str = "org_default") -> List[dict]:
+async def get_all_products(org_id: str = "org_default", store_id: str = None) -> List[dict]:
     async with _acquire_conn() as conn:
-        rows = await conn.fetch(
-            "SELECT * FROM products WHERE org_id = $1 ORDER BY created_at DESC",
-            org_id,
-        )
+        if store_id:
+            rows = await conn.fetch(
+                "SELECT * FROM products WHERE org_id = $1 AND store_id = $2 ORDER BY created_at DESC",
+                org_id, store_id,
+            )
+        else:
+            rows = await conn.fetch(
+                "SELECT * FROM products WHERE org_id = $1 ORDER BY created_at DESC",
+                org_id,
+            )
         result: List[dict] = _rows(rows)
         # 前端用 product_id 字段，数据库主键是 id，添加别名
         for p in result:
@@ -341,11 +347,12 @@ async def insert_product(product: dict, merge_duplicate_sku: bool = False) -> di
     sku = product.get("sku") or product.get("code", "")
     
     async with _acquire_conn() as conn:
-        # 检查是否存在相同SKU
+        # 检查是否存在相同SKU（同一店铺内）
         if merge_duplicate_sku and sku:
+            store_id = product.get("store_id", "store_001")
             existing = await conn.fetchrow(
-                "SELECT * FROM products WHERE org_id = $1 AND (sku = $2 OR code = $2)",
-                org_id, sku
+                "SELECT * FROM products WHERE org_id = $1 AND (sku = $2 OR code = $2) AND store_id = $3",
+                org_id, sku, store_id
             )
             if existing:
                 # SKU已存在，库存累加
@@ -372,8 +379,8 @@ async def insert_product(product: dict, merge_duplicate_sku: bool = False) -> di
         
         row = await conn.fetchrow(
             """
-            INSERT INTO products (id, org_id, code, name, category, cost_price, sale_price, stock, sku)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO products (id, org_id, code, name, category, cost_price, sale_price, stock, sku, store_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *
             """,
             product.get("id"),
@@ -385,6 +392,7 @@ async def insert_product(product: dict, merge_duplicate_sku: bool = False) -> di
             float(product.get("sale_price", 0)),
             int(product.get("stock", 0)),
             sku,
+            product.get("store_id", "store_001"),
         )
         result = _row_to_dict(row)
         if result and "id" in result and "product_id" not in result:
