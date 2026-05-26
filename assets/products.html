@@ -1291,8 +1291,32 @@
             }
         }
 
+        // 加载店铺列表
+        async function loadStores() {
+            try {
+                const response = await fetch('/api/stores', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await response.json();
+                if (data.success && data.stores) {
+                    const select = document.getElementById('storeSelect');
+                    // 保留"全部店铺"选项
+                    select.innerHTML = '<option value="">全部店铺</option>';
+                    // 添加真实店铺
+                    data.stores.forEach(store => {
+                        const option = document.createElement('option');
+                        option.value = store.store_id;
+                        option.textContent = store.name;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('加载店铺列表失败', error);
+            }
+        }
+
         // 初始化
-        loadProducts();
+        loadStores().then(() => loadProducts());
     </script>
 </body>
 </html>
