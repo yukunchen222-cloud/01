@@ -151,6 +151,57 @@
             background: #fafafa;
             border-bottom: 1px solid #f0f0f0;
         }
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        th.sortable:hover {
+            background: #f0f0f0;
+        }
+        th.sortable .sort-icon {
+            margin-left: 4px;
+            font-size: 10px;
+            color: #ccc;
+        }
+        th.sortable.asc .sort-icon::after { content: '↑'; color: #6366f1; }
+        th.sortable.desc .sort-icon::after { content: '↓'; color: #6366f1; }
+        th.filterable {
+            position: relative;
+        }
+        th.filterable .filter-icon {
+            margin-left: 4px;
+            font-size: 10px;
+            color: #6366f1;
+            cursor: pointer;
+        }
+        .category-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            min-width: 150px;
+            z-index: 100;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .category-dropdown .dropdown-item {
+            padding: 10px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .category-dropdown .dropdown-item:hover {
+            background: #f5f5f5;
+        }
+        .category-dropdown .dropdown-item.active {
+            background: #e8f0fe;
+            color: #6366f1;
+            font-weight: 500;
+        }
         td {
             padding: 14px 16px;
             font-size: 14px;
@@ -397,21 +448,7 @@
 
         <!-- 工具栏 -->
         <div class="toolbar">
-            <input type="text" class="search-input" id="searchInput" placeholder="搜款号、商品名、类目..." onkeyup="filterProducts()" style="width: 200px;">
-            <select id="categoryFilter" class="category-select" onchange="filterProducts()" style="padding: 10px 14px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 14px; color: #333; background: #fff; cursor: pointer; min-width: 120px;">
-                <option value="">全部类目</option>
-            </select>
-            <select id="sortSelect" onchange="filterProducts()" style="padding: 10px 14px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 14px; color: #333; background: #fff; cursor: pointer; min-width: 140px;">
-                <option value="">默认排序</option>
-                <option value="stock_asc">库存 ↑ 从低到高</option>
-                <option value="stock_desc">库存 ↓ 从高到低</option>
-                <option value="cost_asc">进价 ↑ 从低到高</option>
-                <option value="cost_desc">进价 ↓ 从高到低</option>
-                <option value="sale_asc">售价 ↑ 从低到高</option>
-                <option value="sale_desc">售价 ↓ 从高到低</option>
-                <option value="name_asc">名称 A-Z</option>
-                <option value="name_desc">名称 Z-A</option>
-            </select>
+            <input type="text" class="search-input" id="searchInput" placeholder="搜款号、商品名、类目..." onkeyup="filterProducts()" style="width: 240px;">
             <div class="toolbar-divider"></div>
             <button class="btn btn-primary" onclick="openAddModal()">＋ 添加商品</button>
             <button class="btn btn-success" onclick="openRecognizeModal()">📷 AI识别导入</button>
@@ -434,12 +471,16 @@
                     <thead>
                         <tr>
                             <th style="width:40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)"></th>
-                            <th>款号</th>
-                            <th>商品名称</th>
-                            <th>类目</th>
-                            <th>进价</th>
-                            <th>售价</th>
-                            <th>库存</th>
+                            <th class="sortable" onclick="sortBy('sku')">款号 <span class="sort-icon" id="sort-sku"></span></th>
+                            <th class="sortable" onclick="sortBy('name')">商品名称 <span class="sort-icon" id="sort-name"></span></th>
+                            <th class="sortable filterable" onclick="toggleCategoryFilter(event)">类目 <span class="filter-icon">▼</span><span class="sort-icon" id="sort-category"></span>
+                                <div class="category-dropdown" id="categoryDropdown" style="display:none;" onclick="event.stopPropagation()">
+                                    <div class="dropdown-item" onclick="selectCategory('')">全部类目</div>
+                                </div>
+                            </th>
+                            <th class="sortable" onclick="sortBy('cost_price')">进价 <span class="sort-icon" id="sort-cost_price"></span></th>
+                            <th class="sortable" onclick="sortBy('sale_price')">售价 <span class="sort-icon" id="sort-sale_price"></span></th>
+                            <th class="sortable" onclick="sortBy('stock')">库存 <span class="sort-icon" id="sort-stock"></span></th>
                             <th>状态</th>
                             <th>上次更新</th>
                             <th>操作</th>
@@ -568,6 +609,83 @@
     <script>
         let products = [];
         const token = localStorage.getItem('token');
+        
+        // 排序状态：0=无排序, 1=降序, 2=升序
+        let sortState = {};
+        // 类目筛选
+        let categoryFilterValue = '';
+
+        // 点击列头排序（三态：无→降序→升序→无...）
+        function sortBy(field) {
+            // 点击非类目列时关闭类目下拉
+            document.getElementById('categoryDropdown').style.display = 'none';
+            
+            // 获取当前状态，默认0
+            let current = sortState[field] || 0;
+            // 循环：0→1→2→0
+            let next = (current + 1) % 3;
+            
+            // 清除所有列的排序状态
+            document.querySelectorAll('th.sortable').forEach(th => {
+                th.classList.remove('asc', 'desc');
+            });
+            document.querySelectorAll('.sort-icon').forEach(icon => {
+                icon.className = 'sort-icon';
+            });
+            
+            if (next === 0) {
+                // 恢复无排序
+                sortState[field] = 0;
+            } else if (next === 1) {
+                // 降序（从高到低）
+                sortState[field] = 1;
+                document.getElementById('sort-' + field).parentElement.classList.add('desc');
+            } else {
+                // 升序（从低到高）
+                sortState[field] = 2;
+                document.getElementById('sort-' + field).parentElement.classList.add('asc');
+            }
+            
+            filterProducts();
+        }
+
+        // 切换类目筛选下拉
+        function toggleCategoryFilter(event) {
+            event.stopPropagation();
+            const dropdown = document.getElementById('categoryDropdown');
+            if (dropdown.style.display === 'none') {
+                dropdown.style.display = 'block';
+                // 更新类目列表
+                updateCategoryDropdown();
+            } else {
+                dropdown.style.display = 'none';
+            }
+        }
+
+        // 更新类目下拉选项
+        function updateCategoryDropdown() {
+            const dropdown = document.getElementById('categoryDropdown');
+            const categories = [...new Set(products.map(p => p.category).filter(c => c))];
+            
+            dropdown.innerHTML = '<div class="dropdown-item ' + (categoryFilterValue === '' ? 'active' : '') + '" onclick="selectCategory(\'\')">全部类目</div>';
+            categories.forEach(cat => {
+                dropdown.innerHTML += '<div class="dropdown-item ' + (categoryFilterValue === cat ? 'active' : '') + '" onclick="selectCategory(\'' + cat + '\')">' + cat + '</div>';
+            });
+        }
+
+        // 选择类目
+        function selectCategory(category) {
+            categoryFilterValue = category;
+            document.getElementById('categoryDropdown').style.display = 'none';
+            filterProducts();
+        }
+
+        // 点击页面其他地方关闭类目下拉
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.filterable')) {
+                document.getElementById('categoryDropdown').style.display = 'none';
+            }
+        });
 
         // 拖拽上传相关函数
         function handleDragOver(e) {
@@ -643,29 +761,8 @@
                 products = [];
             }
             document.getElementById('loadingState').style.display = 'none';
-            updateCategoryFilter();
             renderProducts();
             updateStats();
-        }
-
-        function updateCategoryFilter() {
-            var categories = {};
-            products.forEach(function(p) {
-                var cat = p.category || '其他';
-                if (cat) categories[cat] = true;
-            });
-            var select = document.getElementById('categoryFilter');
-            var currentValue = select.value;
-            select.innerHTML = '<option value="">全部类目</option>';
-            Object.keys(categories).sort().forEach(function(cat) {
-                var option = document.createElement('option');
-                option.value = cat;
-                option.textContent = cat;
-                select.appendChild(option);
-            });
-            if (categories[currentValue]) {
-                select.value = currentValue;
-            }
         }
 
         function formatTime(isoString) {
@@ -681,41 +778,50 @@
 
         function renderProducts(filter) {
             if (filter === undefined) filter = document.getElementById('searchInput').value || '';
-            var categoryFilter = document.getElementById('categoryFilter').value || '';
-            var sortValue = document.getElementById('sortSelect').value || '';
             const tbody = document.getElementById('productTable');
+            
+            // 筛选
             var filtered = products.filter(function(p) {
                 var s = filter.toLowerCase();
                 var matchSearch = (p.sku || '').toLowerCase().includes(s) ||
                        (p.name || '').toLowerCase().includes(s) ||
                        (p.category || '').toLowerCase().includes(s);
-                var matchCategory = !categoryFilter || (p.category || '') === categoryFilter;
+                var matchCategory = !categoryFilterValue || (p.category || '') === categoryFilterValue;
                 return matchSearch && matchCategory;
             });
 
-            // 排序
-            if (sortValue) {
+            // 排序（根据sortState）
+            var sortField = null;
+            var sortDirection = 0; // 0=无, 1=降序, 2=升序
+            for (var field in sortState) {
+                if (sortState[field] > 0) {
+                    sortField = field;
+                    sortDirection = sortState[field];
+                    break;
+                }
+            }
+
+            if (sortField) {
                 filtered.sort(function(a, b) {
-                    var valA, valB;
-                    switch (sortValue) {
-                        case 'stock_asc':
-                            return (a.stock || 0) - (b.stock || 0);
-                        case 'stock_desc':
-                            return (b.stock || 0) - (a.stock || 0);
-                        case 'cost_asc':
-                            return (a.cost_price || 0) - (b.cost_price || 0);
-                        case 'cost_desc':
-                            return (b.cost_price || 0) - (a.cost_price || 0);
-                        case 'sale_asc':
-                            return (a.sale_price || 0) - (b.sale_price || 0);
-                        case 'sale_desc':
-                            return (b.sale_price || 0) - (a.sale_price || 0);
-                        case 'name_asc':
-                            return (a.name || '').localeCompare(b.name || '', 'zh-CN');
-                        case 'name_desc':
-                            return (b.name || '').localeCompare(a.name || '', 'zh-CN');
-                        default:
-                            return 0;
+                    var valA = a[sortField] || 0;
+                    var valB = b[sortField] || 0;
+                    
+                    // 字符串排序
+                    if (sortField === 'name' || sortField === 'sku' || sortField === 'category') {
+                        valA = (a[sortField] || '').toString();
+                        valB = (b[sortField] || '').toString();
+                        if (sortDirection === 1) {
+                            return valB.localeCompare(valA, 'zh-CN'); // 降序
+                        } else {
+                            return valA.localeCompare(valB, 'zh-CN'); // 升序
+                        }
+                    }
+                    
+                    // 数字排序
+                    if (sortDirection === 1) {
+                        return valB - valA; // 降序（从高到低）
+                    } else {
+                        return valA - valB; // 升序（从低到高）
                     }
                 });
             }
