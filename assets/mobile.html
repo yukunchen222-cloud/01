@@ -791,14 +791,28 @@
         async function confirmRecord() {
             if (!lastRecordData) { alert('无数据可提交'); return; }
             
+            // 重新获取token，确保是最新的
+            const currentToken = localStorage.getItem('token');
+            if (!currentToken) {
+                alert('请先登录');
+                window.location.href = '/login.html';
+                return;
+            }
+            
             const extracted = lastRecordData;
             const fields = extracted.extracted_fields || {};
             const storeId = user.store_ids?.[0] || 'store_001';
             
+            console.log('提交数据:', {
+                type: extracted.data_type,
+                items: fields.items,
+                total_amount: fields.total_amount
+            });
+            
             try {
                 const resp = await fetch('/api/records', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
                     body: JSON.stringify({
                         org_id: 'org_default',
                         store_id: storeId,
@@ -813,7 +827,16 @@
                         operator: user.name || ''
                     })
                 });
+                
+                console.log('响应状态:', resp.status);
                 const result = await resp.json();
+                console.log('响应结果:', result);
+                
+                if (resp.status === 401) {
+                    alert('登录已过期，请重新登录');
+                    window.location.href = '/login.html';
+                    return;
+                }
                 
                 if (result.success) {
                     // 处理库存警告
