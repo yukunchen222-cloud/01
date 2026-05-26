@@ -401,6 +401,17 @@
             <select id="categoryFilter" class="category-select" onchange="filterProducts()" style="padding: 10px 14px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 14px; color: #333; background: #fff; cursor: pointer; min-width: 120px;">
                 <option value="">全部类目</option>
             </select>
+            <select id="sortSelect" onchange="filterProducts()" style="padding: 10px 14px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 14px; color: #333; background: #fff; cursor: pointer; min-width: 140px;">
+                <option value="">默认排序</option>
+                <option value="stock_asc">库存 ↑ 从低到高</option>
+                <option value="stock_desc">库存 ↓ 从高到低</option>
+                <option value="cost_asc">进价 ↑ 从低到高</option>
+                <option value="cost_desc">进价 ↓ 从高到低</option>
+                <option value="sale_asc">售价 ↑ 从低到高</option>
+                <option value="sale_desc">售价 ↓ 从高到低</option>
+                <option value="name_asc">名称 A-Z</option>
+                <option value="name_desc">名称 Z-A</option>
+            </select>
             <div class="toolbar-divider"></div>
             <button class="btn btn-primary" onclick="openAddModal()">＋ 添加商品</button>
             <button class="btn btn-success" onclick="openRecognizeModal()">📷 AI识别导入</button>
@@ -671,8 +682,9 @@
         function renderProducts(filter) {
             if (filter === undefined) filter = document.getElementById('searchInput').value || '';
             var categoryFilter = document.getElementById('categoryFilter').value || '';
+            var sortValue = document.getElementById('sortSelect').value || '';
             const tbody = document.getElementById('productTable');
-            const filtered = products.filter(function(p) {
+            var filtered = products.filter(function(p) {
                 var s = filter.toLowerCase();
                 var matchSearch = (p.sku || '').toLowerCase().includes(s) ||
                        (p.name || '').toLowerCase().includes(s) ||
@@ -680,6 +692,33 @@
                 var matchCategory = !categoryFilter || (p.category || '') === categoryFilter;
                 return matchSearch && matchCategory;
             });
+
+            // 排序
+            if (sortValue) {
+                filtered.sort(function(a, b) {
+                    var valA, valB;
+                    switch (sortValue) {
+                        case 'stock_asc':
+                            return (a.stock || 0) - (b.stock || 0);
+                        case 'stock_desc':
+                            return (b.stock || 0) - (a.stock || 0);
+                        case 'cost_asc':
+                            return (a.cost_price || 0) - (b.cost_price || 0);
+                        case 'cost_desc':
+                            return (b.cost_price || 0) - (a.cost_price || 0);
+                        case 'sale_asc':
+                            return (a.sale_price || 0) - (b.sale_price || 0);
+                        case 'sale_desc':
+                            return (b.sale_price || 0) - (a.sale_price || 0);
+                        case 'name_asc':
+                            return (a.name || '').localeCompare(b.name || '', 'zh-CN');
+                        case 'name_desc':
+                            return (b.name || '').localeCompare(a.name || '', 'zh-CN');
+                        default:
+                            return 0;
+                    }
+                });
+            }
 
             document.getElementById('tableCount').textContent = '共 ' + filtered.length + ' 件商品';
 
