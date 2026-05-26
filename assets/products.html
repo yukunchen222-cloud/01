@@ -397,7 +397,10 @@
 
         <!-- 工具栏 -->
         <div class="toolbar">
-            <input type="text" class="search-input" id="searchInput" placeholder="搜款号、商品名、类目..." onkeyup="filterProducts()">
+            <input type="text" class="search-input" id="searchInput" placeholder="搜款号、商品名、类目..." onkeyup="filterProducts()" style="width: 200px;">
+            <select id="categoryFilter" class="category-select" onchange="filterProducts()" style="padding: 10px 14px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 14px; color: #333; background: #fff; cursor: pointer; min-width: 120px;">
+                <option value="">全部类目</option>
+            </select>
             <div class="toolbar-divider"></div>
             <button class="btn btn-primary" onclick="openAddModal()">＋ 添加商品</button>
             <button class="btn btn-success" onclick="openRecognizeModal()">📷 AI识别导入</button>
@@ -629,8 +632,29 @@
                 products = [];
             }
             document.getElementById('loadingState').style.display = 'none';
+            updateCategoryFilter();
             renderProducts();
             updateStats();
+        }
+
+        function updateCategoryFilter() {
+            var categories = {};
+            products.forEach(function(p) {
+                var cat = p.category || '其他';
+                if (cat) categories[cat] = true;
+            });
+            var select = document.getElementById('categoryFilter');
+            var currentValue = select.value;
+            select.innerHTML = '<option value="">全部类目</option>';
+            Object.keys(categories).sort().forEach(function(cat) {
+                var option = document.createElement('option');
+                option.value = cat;
+                option.textContent = cat;
+                select.appendChild(option);
+            });
+            if (categories[currentValue]) {
+                select.value = currentValue;
+            }
         }
 
         function formatTime(isoString) {
@@ -646,12 +670,15 @@
 
         function renderProducts(filter) {
             if (filter === undefined) filter = document.getElementById('searchInput').value || '';
+            var categoryFilter = document.getElementById('categoryFilter').value || '';
             const tbody = document.getElementById('productTable');
             const filtered = products.filter(function(p) {
                 var s = filter.toLowerCase();
-                return (p.sku || '').toLowerCase().includes(s) ||
+                var matchSearch = (p.sku || '').toLowerCase().includes(s) ||
                        (p.name || '').toLowerCase().includes(s) ||
                        (p.category || '').toLowerCase().includes(s);
+                var matchCategory = !categoryFilter || (p.category || '') === categoryFilter;
+                return matchSearch && matchCategory;
             });
 
             document.getElementById('tableCount').textContent = '共 ' + filtered.length + ' 件商品';
