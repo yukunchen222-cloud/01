@@ -649,7 +649,7 @@
         
         if (!token || user.role !== 'manager') {
             // 未登录或非店长角色，跳转登录页
-            // window.location.href = '/login.html';
+            window.location.href = '/login.html';
         }
         
         // 设置用户信息
@@ -833,9 +833,17 @@
                 const result = await resp.json();
                 console.log('响应结果:', result);
                 
-                if (resp.status === 401) {
-                    alert('登录已过期，请重新登录');
-                    window.location.href = '/login.html';
+                // 统一错误处理：检查HTTP状态和success字段
+                if (!resp.ok || !result.success) {
+                    const msg = result.error || result.message || `服务异常 (${resp.status})`;
+                    // 检查是否是登录态问题
+                    if (resp.status === 401 || /未登录|登录已过期|token/i.test(msg)) {
+                        alert('⚠️ 登录已过期，请重新登录');
+                        localStorage.removeItem('token');
+                        window.location.href = '/login.html';
+                        return;
+                    }
+                    alert('❌ 提交失败: ' + msg);
                     return;
                 }
                 

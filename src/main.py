@@ -657,7 +657,7 @@ async def create_record(request: Request):
     """创建交易记录（确认提交）- 需要登录，自动扣减库存"""
     user = await get_current_user(request)
     if not user:
-        return {"success": False, "error": "未登录，请先登录"}
+        raise HTTPException(status_code=401, detail="未登录，请先登录")
     
     try:
         data = await request.json()
@@ -782,7 +782,7 @@ async def create_record_force(request: Request):
     """强制创建记录（忽略库存警告）- 需要登录"""
     user = await get_current_user(request)
     if not user:
-        return {"success": False, "error": "未登录，请先登录"}
+        raise HTTPException(status_code=401, detail="未登录，请先登录")
     
     try:
         data = await request.json()
@@ -863,7 +863,7 @@ async def approve_record(record_id: str, request: Request):
     """审核通过 - 仅老板可操作"""
     user = await require_owner(request)
     if not user:
-        return {"success": False, "error": "无权限，仅老板可审核"}
+        raise HTTPException(status_code=401, detail="无权限，仅老板可审核")
     """审核通过记录"""
     try:
         updated = await _update_record(record_id, {"status": "approved"})
@@ -879,7 +879,7 @@ async def reject_record(record_id: str, request: Request):
     """审核驳回记录 - 仅老板可操作"""
     user = await require_owner(request)
     if not user:
-        return {"success": False, "error": "无权限，仅老板可审核"}
+        raise HTTPException(status_code=401, detail="无权限，仅老板可审核")
     
     try:
         updated = await _update_record(record_id, {"status": "rejected"})
