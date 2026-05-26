@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+    <!-- 版本: 20260526-0910 -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>店长端 - AI记账助手</title>
@@ -851,7 +852,7 @@
                             // 强制提交
                             const forceResp = await fetch('/api/records/force', {
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
                                 body: JSON.stringify({
                                     org_id: 'org_default',
                                     store_id: storeId,
