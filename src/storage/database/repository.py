@@ -70,7 +70,7 @@ def _row_to_dict(row: asyncpg.Record) -> Optional[dict]:
             d[k] = round(v, 2)
         elif isinstance(v, datetime):
             d[k] = v.isoformat()
-        elif isinstance(v, str) and k == "items":
+        elif isinstance(v, str) and k in ("items", "store_ids"):
             try:
                 d[k] = json.loads(v)
             except Exception:
